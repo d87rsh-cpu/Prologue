@@ -250,6 +250,7 @@ export default function MessagingPage() {
             score_value: scoreValue,
             user_project_id: projectId,
             context: text.slice(0, 500),
+            recipient: recipientBotId,
           });
           if (score < 5) {
             toast(

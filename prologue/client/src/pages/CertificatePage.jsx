@@ -1,58 +1,333 @@
-import { useMemo } from 'react';
-import { QrCode, Download, Share2 } from 'lucide-react';
+import { useEffect, useState, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { Download } from 'lucide-react';
+import QRCode from 'qrcode';
+import { jsPDF } from 'jspdf';
+import html2canvas from 'html2canvas';
+import toast from 'react-hot-toast';
 import Button from '../components/ui/Button';
 import { useAuth } from '../hooks/useAuth';
-import { useActiveProject } from '../hooks/useActiveProject';
+import { supabase } from '../lib/supabase';
+import { ROLES } from '../data/roles';
+import { calculateCertificateScores, getOverallAndGrade } from '../utils/certificateScores';
 
-const ONBOARDING_KEY = 'prologue_onboarding';
+const VERIFY_BASE_URL = 'https://prologue-verify.app/cert';
+const DISPLAY_VERIFY_URL = 'prologue.app/verify';
 
-function getStoredOnboarding() {
-  try {
-    const raw = localStorage.getItem(ONBOARDING_KEY);
-    return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
-  }
+async function fetchActiveUserProject(userId) {
+  if (!userId) return null;
+  const { data, error } = await supabase
+    .from('user_projects')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('status', 'active')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) return null;
+  return data;
 }
 
-function getRoleTitle(roleId, user) {
-  const onboarding = getStoredOnboarding();
-  const id = roleId ?? user?.role_id ?? onboarding?.roleId;
-  const roles = [
-    { id: 'frontend_dev', title: 'Frontend Developer' },
-    { id: 'backend_dev', title: 'Backend Developer' },
-    { id: 'fullstack_dev', title: 'Full Stack Developer' },
-    { id: 'data_analyst', title: 'Data Analyst' },
-    { id: 'ml_engineer', title: 'ML Engineer' },
-    { id: 'ui_ux_designer', title: 'UI/UX Designer' },
-    { id: 'devops_engineer', title: 'DevOps Engineer' },
-    { id: 'cybersecurity', title: 'Cybersecurity Analyst' },
-    { id: 'mobile_dev', title: 'Mobile Developer' },
-    { id: 'product_manager', title: 'Product Manager' },
-  ];
-  return roles.find((r) => r.id === id)?.title ?? 'Team Member';
+async function fetchScores(userProjectId) {
+  if (!userProjectId) return [];
+  const { data, error } = await supabase
+    .from('scores')
+    .select('*')
+    .eq('user_project_id', userProjectId)
+    .order('created_at', { ascending: true });
+  if (error) return [];
+  return data ?? [];
 }
+
+async function fetchTasks(userProjectId) {
+  if (!userProjectId) return [];
+  const { data, error } = await supabase
+    .from('tasks')
+    .select('*')
+    .eq('user_project_id', userProjectId);
+  if (error) return [];
+  return data ?? [];
+}
+
+function getRoleTitle(roleId) {
+  return ROLES.find((r) => r.id === roleId)?.title ?? 'Team Member';
+}
+
+/**
+ * Format date as "21st February 2026"
+ */
+function formatOrdinalDate(iso) {
+  const d = new Date(iso);
+  const day = d.getDate();
+  const suffix = day === 1 || day === 21 || day === 31 ? 'st' : day === 2 || day === 22 ? 'nd' : day === 3 || day === 23 ? 'rd' : 'th';
+  const month = d.toLocaleDateString('en-GB', { month: 'long' });
+  const year = d.getFullYear();
+  return `${day}${suffix} ${month} ${year}`;
+}
+
+const SCORE_LABELS = {
+  task_completion: 'Task Completion',
+  communication_quality: 'Communication Quality',
+  documentation_quality: 'Documentation Quality',
+  delegation: 'Delegation Effectiveness',
+  delegation_effectiveness: 'Delegation Effectiveness',
+  consistency: 'Consistency',
+  leadership: 'Leadership',
+};
+
+const DEMO_CERTS = {
+  'DEMO-RAHUL-ECOM-2025': {
+    userName: 'Rahul Kumar',
+    projectTitle: 'E-Commerce Backend API',
+    roleTitle: 'Backend Developer',
+    grade: 'A',
+    overall: 89,
+    issueDate: '2025-01-15T12:00:00Z',
+    certId: 'DEMO-RAHUL-ECOM-2025',
+    scoreBreakdown: {
+      task_completion: 92,
+      communication_quality: 88,
+      documentation_quality: 85,
+      delegation_effectiveness: 78,
+      consistency: 94,
+      leadership: 87,
+    },
+  },
+  'DEMO-RAHUL-SALES-2024': {
+    userName: 'Rahul Kumar',
+    projectTitle: 'Sales Data Dashboard',
+    roleTitle: 'Data Analyst',
+    grade: 'B+',
+    overall: 81,
+    issueDate: '2024-12-03T12:00:00Z',
+    certId: 'DEMO-RAHUL-SALES-2024',
+    scoreBreakdown: {
+      task_completion: 85,
+      communication_quality: 72,
+      documentation_quality: 88,
+      delegation_effectiveness: 84,
+      consistency: 79,
+      leadership: 77,
+    },
+  },
+};
 
 export default function CertificatePage() {
+  const [searchParams] = useSearchParams();
+  const certIdParam = searchParams.get('certId');
   const { user } = useAuth();
-  const { project } = useActiveProject();
-  const certId = useMemo(() => `CERT-${Math.floor(100000 + Math.random() * 900000)}`, []);
-  const issueDate = new Date().toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  });
-  const userName = user?.name ?? 'Participant';
-  const projectTitle = project?.projectTitle ?? 'Project';
-  const roleTitle = getRoleTitle(project?.myRoleId, user);
-  const finalScore = 82;
-  const grade = finalScore >= 80 ? 'A' : finalScore >= 70 ? 'B' : 'C';
+  const [loading, setLoading] = useState(true);
+  const [project, setProject] = useState(null);
+  const [scores, setScores] = useState([]);
+  const [tasks, setTasks] = useState([]);
+  const [certId, setCertId] = useState(null);
+  const [scoreBreakdown, setScoreBreakdown] = useState({});
+  const [overall, setOverall] = useState(0);
+  const [grade, setGrade] = useState('D');
+  const [issueDate, setIssueDate] = useState(null);
+  const [qrDataUrl, setQrDataUrl] = useState(null);
+  const certCardRef = useRef(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function load() {
+      setLoading(true);
+
+      if (certIdParam) {
+        const demo = DEMO_CERTS[certIdParam];
+        if (demo) {
+          setProject({ project_title: demo.projectTitle, my_role_id: null });
+          setCertId(demo.certId);
+          setScoreBreakdown(demo.scoreBreakdown);
+          setOverall(demo.overall);
+          setGrade(demo.grade);
+          setIssueDate(demo.issueDate);
+          try {
+            const dataUrl = await QRCode.toDataURL(`${VERIFY_BASE_URL}/${demo.certId}`, { width: 180, margin: 1 });
+            if (!cancelled) setQrDataUrl(dataUrl);
+          } catch (_) {}
+          setLoading(false);
+          return;
+        }
+        const { data: cert } = await supabase.from('certificates').select('*').eq('cert_id', certIdParam).maybeSingle();
+        if (cancelled || !cert) {
+          setLoading(false);
+          return;
+        }
+        const [userRes, projRes] = await Promise.all([
+          supabase.from('users').select('name').eq('id', cert.user_id).maybeSingle(),
+          supabase.from('user_projects').select('*').eq('id', cert.user_project_id).maybeSingle(),
+        ]);
+        const up = projRes.data ?? {};
+        setProject(up);
+        setCertId(cert.cert_id);
+        setScoreBreakdown(cert.score_breakdown ?? {});
+        setOverall(cert.final_score ?? 0);
+        setGrade(cert.grade ?? 'D');
+        setIssueDate(cert.issued_at);
+        try {
+          const dataUrl = await QRCode.toDataURL(`${VERIFY_BASE_URL}/${cert.cert_id}`, { width: 180, margin: 1 });
+          if (!cancelled) setQrDataUrl(dataUrl);
+        } catch (_) {}
+        setLoading(false);
+        return;
+      }
+
+      if (!user?.id) {
+        setLoading(false);
+        return;
+      }
+
+      const proj = await fetchActiveUserProject(user.id);
+      if (cancelled) return;
+      if (!proj) {
+        setLoading(false);
+        setProject(null);
+        return;
+      }
+
+      const [scoreList, taskList] = await Promise.all([fetchScores(proj.id), fetchTasks(proj.id)]);
+      if (cancelled) return;
+
+      setProject(proj);
+      setScores(scoreList);
+      setTasks(taskList);
+
+      const breakdown = calculateCertificateScores(scoreList, taskList, proj);
+      const { overall: ov, grade: g } = getOverallAndGrade(breakdown);
+
+      const projIdPart = ((proj.project_id ?? proj.id) ?? '').toString().replace(/-/g, '').slice(0, 6).toUpperCase();
+      const generatedCertId = 'CERT-' + projIdPart + '-' + Date.now().toString(36).toUpperCase();
+
+      const issuedAt = new Date().toISOString();
+
+      await supabase.from('certificates').insert({
+        user_id: user.id,
+        user_project_id: proj.id,
+        cert_id: generatedCertId,
+        final_score: ov,
+        grade: g,
+        score_breakdown: breakdown,
+        issued_at: issuedAt,
+      });
+
+      setCertId(generatedCertId);
+      setScoreBreakdown(breakdown);
+      setOverall(ov);
+      setGrade(g);
+      setIssueDate(issuedAt);
+
+      const verifyUrl = `${VERIFY_BASE_URL}/${generatedCertId}`;
+      try {
+        const dataUrl = await QRCode.toDataURL(verifyUrl, { width: 180, margin: 1 });
+        if (!cancelled) setQrDataUrl(dataUrl);
+      } catch (err) {
+        console.warn('QR generation failed', err);
+      }
+
+      setLoading(false);
+    }
+
+    load();
+    return () => { cancelled = true; };
+  }, [user?.id, certIdParam]);
+
+  const handleDownloadPDF = async () => {
+    if (!certCardRef.current) return;
+    try {
+      const canvas = await html2canvas(certCardRef.current, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: '#ffffff',
+        logging: false,
+      });
+
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pdfW = pdf.internal.pageSize.getWidth();
+      const pdfH = pdf.internal.pageSize.getHeight();
+      const imgW = canvas.width;
+      const imgH = canvas.height;
+      const ratio = Math.min(pdfW / imgW, pdfH / imgH) * 0.95;
+      const w = imgW * ratio;
+      const h = imgH * ratio;
+      const x = (pdfW - w) / 2;
+      const y = (pdfH - h) / 2;
+
+      pdf.addImage(imgData, 'PNG', x, y, w, h);
+
+      pdf.addPage();
+      const projectStart = project?.submitted_at ?? project?.created_at ?? '';
+      const projectEnd = new Date().toISOString();
+      const tasksCompleted = tasks?.filter((t) => t.status === 'done').length ?? 0;
+      const messagesSent = scores?.filter((s) => s.score_type === 'communication_quality').length ?? 0;
+      const uniqueDays = scores?.length ? new Set(scores.map((s) => (s.created_at ?? '').slice(0, 10))).size : 0;
+
+      pdf.setFontSize(14);
+      pdf.text(`Detailed Performance Report — ${project?.project_title ?? 'Project'}`, 20, 20);
+      pdf.setFontSize(11);
+      let yPos = 35;
+      for (const [key, val] of Object.entries(scoreBreakdown)) {
+        pdf.text(`${SCORE_LABELS[key] ?? key}: ${Math.round(val)}/100`, 20, yPos);
+        yPos += 8;
+      }
+      yPos += 5;
+      pdf.text(`Date range: ${projectStart ? new Date(projectStart).toLocaleDateString() : '—'} to ${new Date(projectEnd).toLocaleDateString()}`, 20, yPos);
+      yPos += 8;
+      pdf.text(`Total tasks completed: ${tasksCompleted}`, 20, yPos);
+      yPos += 8;
+      pdf.text(`Messages sent: ${messagesSent}`, 20, yPos);
+      yPos += 8;
+      pdf.text(`Streak days (unique days with activity): ${uniqueDays}`, 20, yPos);
+
+      const safeName = (user?.name ?? 'Participant').replace(/[^a-zA-Z0-9\s-]/g, '').replace(/\s+/g, '_').slice(0, 40);
+      const safeTitle = (project?.project_title ?? 'Project').replace(/[^a-zA-Z0-9\s-]/g, '').replace(/\s+/g, '_').slice(0, 40);
+      const filename = `Prologue_Certificate_${safeName}_${safeTitle}.pdf`;
+
+      pdf.save(filename);
+      toast.success('Certificate downloaded successfully!');
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to download PDF');
+    }
+  };
+
+  const demoCert = certIdParam && DEMO_CERTS[certIdParam];
+  const userName = demoCert?.userName ?? user?.name ?? 'Participant';
+  const projectTitle = demoCert?.projectTitle ?? project?.project_title ?? 'Project';
+  const roleTitle = demoCert?.roleTitle ?? getRoleTitle(project?.my_role_id);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-primary py-12 px-4 flex items-center justify-center">
+        <p className="text-text-secondary">Loading certificate...</p>
+      </div>
+    );
+  }
+
+  if (!project && !certIdParam) {
+    return (
+      <div className="min-h-screen bg-primary py-12 px-4 flex items-center justify-center">
+        <p className="text-text-secondary">No active project found. Complete a project to earn your certificate.</p>
+      </div>
+    );
+  }
+
+  if (certIdParam && !project && !DEMO_CERTS[certIdParam]) {
+    return (
+      <div className="min-h-screen bg-primary py-12 px-4 flex items-center justify-center">
+        <p className="text-text-secondary">Certificate not found.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-primary py-12 px-4 print:py-0 print:px-0">
       <div className="max-w-[800px] mx-auto">
-        {/* Certificate card — print-ready */}
         <div
+          id="certificate-card"
+          ref={certCardRef}
           className="bg-white rounded-lg shadow-xl overflow-hidden print:shadow-none print:rounded-none"
           style={{
             maxWidth: 800,
@@ -61,7 +336,6 @@ export default function CertificatePage() {
             boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.05), 0 4px 24px rgba(0,0,0,0.15)',
           }}
         >
-          {/* Ornate top border feel */}
           <div className="border-b-2 border-gray-200 pb-6 mb-6">
             <div className="flex items-center justify-center gap-3 mb-4">
               <div
@@ -78,23 +352,41 @@ export default function CertificatePage() {
           </div>
 
           <p className="text-center text-gray-600 mb-2">This certifies that</p>
-          <p className="text-center text-2xl font-bold text-gray-900 mb-2">{userName}</p>
+          <p className="text-center text-3xl font-bold text-gray-900 mb-2" style={{ fontFamily: 'Georgia, serif' }}>
+            {userName}
+          </p>
           <p className="text-center text-gray-600 mb-4">has successfully completed the project</p>
           <p className="text-center text-xl font-semibold italic text-gray-800 mb-2">{projectTitle}</p>
-          <p className="text-center text-gray-600 mb-6">in the capacity of <strong>{roleTitle}</strong></p>
-
-          <div className="flex justify-center gap-8 mb-6 text-sm text-gray-600">
-            <span>Final Performance Score: <strong className="text-gray-800">{finalScore}/100</strong></span>
-            <span>|</span>
-            <span>Grade: <strong className="text-gray-800">{grade}</strong></span>
-          </div>
-
-          <p className="text-center text-sm text-gray-500 mb-8">
-            Issue date: {issueDate} · Certificate ID: {certId}
+          <p className="text-center text-gray-600 mb-6">
+            in the capacity of <strong>{roleTitle}</strong>
           </p>
 
+          <div className="flex justify-center gap-8 mb-6 text-sm text-gray-600">
+            <span>
+              Final Performance Score: <strong className="text-gray-800">{Math.round(overall)}/100</strong>
+            </span>
+            <span>|</span>
+            <span>
+              Grade: <strong className="text-gray-800">{grade}</strong>
+            </span>
+          </div>
+
+          <p className="text-center text-sm text-gray-500 mb-6">
+            Issue date: {issueDate ? formatOrdinalDate(issueDate) : '—'} · Certificate ID: {certId ?? '—'}
+          </p>
+
+          {/* Score breakdown table - 6 scores in 2 columns */}
+          <div className="grid grid-cols-2 gap-x-8 gap-y-1 mb-6 text-xs text-gray-600 max-w-md mx-auto">
+            {Object.entries(scoreBreakdown).map(([key, val]) => (
+              <div key={key} className="flex justify-between">
+                <span>{SCORE_LABELS[key] ?? key}</span>
+                <span className="font-medium text-gray-800">{Math.round(val)}</span>
+              </div>
+            ))}
+          </div>
+
           {/* Signatures */}
-          <div className="grid grid-cols-2 gap-8 mb-8">
+          <div className="grid grid-cols-2 gap-8 mb-6">
             <div className="text-center">
               <div className="h-12 border-b-2 border-gray-400 mb-2" />
               <p className="text-sm font-semibold text-gray-800">Arjun Nair</p>
@@ -107,24 +399,27 @@ export default function CertificatePage() {
             </div>
           </div>
 
-          {/* QR placeholder */}
-          <div className="flex justify-center">
-            <div className="w-24 h-24 rounded-lg bg-gray-100 border-2 border-dashed border-gray-300 flex flex-col items-center justify-center gap-1">
-              <QrCode className="w-8 h-8 text-gray-400" />
-              <span className="text-xs text-gray-500 text-center leading-tight">Scan to Verify</span>
-            </div>
+          {/* QR code */}
+          <div className="flex flex-col items-center">
+            {qrDataUrl ? (
+              <img src={qrDataUrl} alt="QR code to verify certificate" className="w-[120px] h-[120px]" />
+            ) : (
+              <div className="w-[120px] h-[120px] rounded bg-gray-100 border border-gray-300" />
+            )}
+            <p className="mt-2 text-xs text-gray-500 text-center">
+              Scan or visit {DISPLAY_VERIFY_URL}/{certId ?? '...'}
+            </p>
           </div>
         </div>
 
-        {/* Actions — hide when printing */}
         <div className="flex flex-wrap justify-center gap-4 mt-8 print:hidden">
-          <Button variant="primary" onClick={() => window.print?.()} className="inline-flex items-center gap-2">
+          <Button
+            variant="primary"
+            onClick={handleDownloadPDF}
+            className="inline-flex items-center gap-2"
+          >
             <Download className="w-4 h-4" />
             Download as PDF
-          </Button>
-          <Button variant="secondary" className="inline-flex items-center gap-2">
-            <Share2 className="w-4 h-4" />
-            Share Certificate
           </Button>
         </div>
       </div>

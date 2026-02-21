@@ -1,60 +1,62 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import { LineChart, Line, ResponsiveContainer } from 'recharts';
+import { ChevronUp, ChevronDown, Minus } from 'lucide-react';
+import { useScores } from '../hooks/useScores';
+import { useDemoMode } from '../hooks/useDemoMode';
 
 const SCORE_CATEGORIES = [
   {
     id: 'task_completion',
     title: 'Task Completion Score',
     description: 'Based on tasks completed on time',
-    score: 88,
     style: 'circle',
   },
   {
-    id: 'communication',
+    id: 'communication_quality',
     title: 'Communication Quality',
     description: 'Based on your message professionalism with manager and team',
-    score: 82,
     style: 'bar',
   },
   {
-    id: 'documentation',
+    id: 'documentation_quality',
     title: 'Documentation Quality',
     description: 'Based on documentation submitted per task',
-    score: 79,
     style: 'bar',
   },
   {
     id: 'delegation',
     title: 'Delegation Effectiveness',
     description: 'Based on how well you guided AI teammates and delegated work',
-    score: 75,
     style: 'bar',
   },
   {
     id: 'consistency',
     title: 'Consistency Score',
     description: 'Based on daily logins and regular progress',
-    score: 91,
     style: 'circle',
-    streak: 4,
   },
   {
     id: 'leadership',
     title: 'Leadership Score',
-    description: 'Interactions that showed initiative',
-    score: 72,
+    description: 'Interactions that showed initiative with teammates',
     style: 'bar',
-    extra: '3 times helped teammates',
   },
 ];
 
 function getGrade(avg) {
-  if (avg >= 90) return 'A';
+  if (avg >= 90) return 'A+';
   if (avg >= 80) return 'A';
   if (avg >= 70) return 'B';
   if (avg >= 60) return 'C';
   return 'D';
+}
+
+function TrendIcon({ trend }) {
+  if (trend === 1) return <ChevronUp className="w-4 h-4 text-green-500" />;
+  if (trend === -1) return <ChevronDown className="w-4 h-4 text-red-500" />;
+  return <Minus className="w-4 h-4 text-text-secondary" />;
 }
 
 function AnimatedCircle({ score, size = 120 }) {
@@ -91,7 +93,7 @@ function AnimatedCircle({ score, size = 120 }) {
         />
       </svg>
       <span className="absolute inset-0 flex items-center justify-center text-xl font-semibold text-text-primary">
-        {mounted ? score : 0}
+        {mounted ? Math.round(score) : 0}
       </span>
     </div>
   );
@@ -106,21 +108,87 @@ function AnimatedBar({ score }) {
       <motion.div
         className="h-full rounded-full bg-success"
         initial={{ width: 0 }}
-        animate={{ width: mounted ? `${score}%` : 0 }}
+        animate={{ width: mounted ? `${Math.min(100, score)}%` : 0 }}
         transition={{ duration: 1, ease: 'easeOut' }}
       />
     </div>
   );
 }
 
+function SparklineChart({ data }) {
+  if (!data || data.length === 0) return null;
+
+  const chartData = data.map((d) => ({ value: d.value }));
+
+  return (
+    <div className="h-10 w-full mt-2">
+      <ResponsiveContainer width="100%" height="100%">
+        <LineChart data={chartData} margin={{ top: 2, right: 2, bottom: 2, left: 2 }}>
+          <Line
+            type="monotone"
+            dataKey="value"
+            stroke="var(--color-success)"
+            strokeWidth={2}
+            dot={false}
+            isAnimationActive
+          />
+        </LineChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+const DEMO_SCORES = {
+  task_completion: 92,
+  communication_quality: 88,
+  documentation_quality: 85,
+  delegation: 78,
+  consistency: 94,
+  leadership: 87,
+};
+
 export default function ScoresPage() {
   const navigate = useNavigate();
   const [mounted, setMounted] = useState(false);
+  const { loading: scoresLoading, scores: rawScores, trends, scoreHistory } = useScores();
+  const { isDemo } = useDemoMode();
+  const scores = isDemo ? DEMO_SCORES : rawScores;
+  const loading = isDemo ? false : scoresLoading;
+
   useEffect(() => setMounted(true), []);
 
-  const scores = SCORE_CATEGORIES.map((c) => c.score);
-  const overall = Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
+  const scoreValues = SCORE_CATEGORIES.map((c) => {
+    const key = c.id === 'delegation' ? 'delegation' : c.id;
+    return scores[key] ?? 0;
+  });
+  const overall = scoreValues.length > 0
+    ? Math.round((scoreValues.reduce((a, b) => a + b, 0) / scoreValues.length) * 10) / 10
+    : 0;
   const grade = getGrade(overall);
+
+  const getScoreForCategory = (cat) => {
+    const key = cat.id === 'delegation' ? 'delegation' : cat.id;
+    return scores[key] ?? 0;
+  };
+
+  const getTrendForCategory = (cat) => {
+    const key = cat.id === 'delegation' ? 'delegation' : cat.id;
+    return trends[key] ?? 0;
+  };
+
+  const getHistoryForCategory = (cat) => {
+    const key = cat.id === 'delegation' ? 'delegation' : cat.id;
+    const hist = scoreHistory[key];
+    return Array.isArray(hist) && hist.length > 0 ? hist : null;
+  };
+
+  if (loading) {
+    return (
+      <div className="p-6 max-w-5xl mx-auto flex items-center justify-center min-h-[400px]">
+        <p className="text-text-secondary">Loading scores...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
@@ -132,37 +200,50 @@ export default function ScoresPage() {
       </header>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-10">
-        {SCORE_CATEGORIES.map((cat) => (
-          <motion.div
-            key={cat.id}
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4 }}
-            className="rounded-lg border border-border bg-card-bg p-5"
-          >
-            <h3 className="font-semibold text-text-primary mb-1">{cat.title}</h3>
-            <p className="text-sm text-text-secondary mb-4">{cat.description}</p>
-            {cat.style === 'circle' ? (
-              <div className="flex items-center gap-4">
-                <AnimatedCircle score={cat.score} size={100} />
-                {cat.streak != null && (
-                  <div>
-                    <p className="text-2xl font-semibold text-text-primary">{cat.score}</p>
-                    <p className="text-sm text-text-secondary">Day streak: {cat.streak}</p>
+        {SCORE_CATEGORIES.map((cat) => {
+          const scoreVal = getScoreForCategory(cat);
+          const trend = getTrendForCategory(cat);
+          const history = getHistoryForCategory(cat);
+
+          return (
+            <motion.div
+              key={cat.id}
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4 }}
+              className="rounded-lg border border-border bg-card-bg p-5"
+            >
+              <h3 className="font-semibold text-text-primary mb-1">{cat.title}</h3>
+              <p className="text-sm text-text-secondary mb-4">{cat.description}</p>
+              {cat.style === 'circle' ? (
+                <div className="flex items-center gap-4">
+                  <AnimatedCircle score={scoreVal} size={100} />
+                  <div className="flex flex-col gap-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-2xl font-semibold text-text-primary">
+                        {mounted ? Math.round(scoreVal) : 0}
+                      </span>
+                      <TrendIcon trend={trend} />
+                    </div>
                   </div>
-                )}
-              </div>
-            ) : (
-              <div>
-                <div className="flex justify-between items-center mb-2">
-                  <span className="text-lg font-semibold text-text-primary">{cat.score}/100</span>
-                  {cat.extra && <span className="text-xs text-text-secondary">{cat.extra}</span>}
                 </div>
-                <AnimatedBar score={cat.score} />
-              </div>
-            )}
-          </motion.div>
-        ))}
+              ) : (
+                <div>
+                  <div className="flex justify-between items-center mb-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-lg font-semibold text-text-primary">
+                        {mounted ? Math.round(scoreVal) : 0}/100
+                      </span>
+                      <TrendIcon trend={trend} />
+                    </div>
+                  </div>
+                  <AnimatedBar score={scoreVal} />
+                </div>
+              )}
+              {history && <SparklineChart data={history} />}
+            </motion.div>
+          );
+        })}
       </div>
 
       <motion.div

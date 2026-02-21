@@ -18,6 +18,7 @@ import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
 import { useAuth } from '../hooks/useAuth';
 import { useProject } from '../hooks/useProject';
+import { useDemoMode } from '../hooks/useDemoMode';
 import { useMessagesBadge } from '../contexts/MessagesBadgeContext';
 import { checkAndTriggerBotMessages } from '../lib/botScheduler';
 
@@ -67,15 +68,17 @@ export default function DashboardPage() {
     streak,
     projectHealth,
   } = useProject();
+  const { overrides: demoOverrides } = useDemoMode();
+  const displayStreak = demoOverrides?.streak ?? streak;
 
   const { refreshMessagesBadge } = useMessagesBadge();
 
   useEffect(() => {
     if (loading || !project?.id || !tasks) return;
-    checkAndTriggerBotMessages(project, tasks, undefined, streak).then(() => {
+    checkAndTriggerBotMessages(project, tasks, undefined, displayStreak).then(() => {
       refreshMessagesBadge();
     });
-  }, [loading, project?.id, streak, refreshMessagesBadge]);
+  }, [loading, project?.id, displayStreak, refreshMessagesBadge]);
 
   const [submitModalTask, setSubmitModalTask] = useState(null);
   const [submitWorkDescription, setSubmitWorkDescription] = useState('');
@@ -259,7 +262,7 @@ export default function DashboardPage() {
             </div>
             <div className="flex items-center gap-6">
               <span className="text-sm text-text-secondary">{dateStr}</span>
-              <span className="text-sm text-text-secondary">Day {streak || 1} of your journey</span>
+              <span className="text-sm text-text-secondary">Day {displayStreak || 1} of your journey</span>
               <div className="relative w-12 h-12">
                 <svg className="w-12 h-12 -rotate-90" viewBox="0 0 36 36">
                   <path
@@ -289,7 +292,7 @@ export default function DashboardPage() {
           {[
             { label: 'Tasks Completed', value: `${tasksCompleted}/${totalTasks}`, trend: true },
             { label: "Today's Score", value: todayScore ?? '—', suffix: todayScore != null ? '/100' : '', color: 'text-success' },
-            { label: 'Streak', value: streak, icon: Flame },
+            { label: 'Streak', value: displayStreak, icon: Flame },
             { label: 'Project Health', value: projectHealth, pill: true, pillStyle: HEALTH_STYLES[projectHealth] ?? HEALTH_STYLES['On Track'] },
           ].map((w, i) => (
             <div key={i} className="rounded-lg border border-border bg-card-bg p-4">

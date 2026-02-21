@@ -13,6 +13,9 @@ export default function Sidebar() {
         <NavLink to="/scores" className="px-3 py-2 rounded-lg text-text-secondary hover:bg-card-bg hover:text-text-primary">
           Scores
         </NavLink>
+        <NavLink to="/completed" className="px-3 py-2 rounded-lg text-text-secondary hover:bg-card-bg hover:text-text-primary">
+          Completed Projects
+        </NavLink>
       </nav>
     </aside>
   );

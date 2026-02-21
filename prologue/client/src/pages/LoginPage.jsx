@@ -205,6 +205,17 @@ export default function LoginPage() {
                     <Button type="submit" className="w-full" size="lg" disabled={submitLoading}>
                       {submitLoading ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : 'Login'}
                     </Button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setLoginEmployeeId('PRO-2024-00001');
+                        setLoginPassword('prologue2024demo');
+                        setLoginError('');
+                      }}
+                      className="w-full text-sm text-text-secondary hover:text-accent transition-colors"
+                    >
+                      Try Demo Account (Judges)
+                    </button>
                   </form>
                 ) : (
                   <form onSubmit={handleSignup} className="space-y-4">

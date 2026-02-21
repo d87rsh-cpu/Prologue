@@ -191,6 +191,20 @@ export function useProject() {
         user_project_id: project.id,
       });
 
+      const docQualityValue = (workDescription ?? '').length > 100 ? 100 : 0;
+      await supabase.from('scores').insert({
+        score_type: 'documentation_quality',
+        score_value: docQualityValue,
+        user_project_id: project.id,
+      });
+
+      const delegationValue = Math.round((100 - (aiInvolvementPercentage ?? 0)) * 10) / 10;
+      await supabase.from('scores').insert({
+        score_type: 'delegation_effectiveness',
+        score_value: delegationValue,
+        user_project_id: project.id,
+      });
+
       await load();
     },
     [tasks, project?.id, load]

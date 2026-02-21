@@ -10,6 +10,7 @@ import PRDFormPage from './pages/PRDFormPage';
 import DashboardPage from './pages/DashboardPage';
 import MessagingPage from './pages/MessagingPage';
 import ScoresPage from './pages/ScoresPage';
+import CompletedProjectsPage from './pages/CompletedProjectsPage';
 import CertificatePage from './pages/CertificatePage';
 import VerificationPage from './pages/VerificationPage';
 import AppShell from './components/layout/AppShell';
@@ -94,6 +95,16 @@ export default function App() {
         <Route index element={<ScoresPage />} />
       </Route>
       <Route
+        path="/completed"
+        element={
+          <ProtectedRoute>
+            <AppShell />
+          </ProtectedRoute>
+        }
+      >
+        <Route index element={<CompletedProjectsPage />} />
+      </Route>
+      <Route
         path="/certificate"
         element={
           <ProtectedRoute>
@@ -101,14 +112,8 @@ export default function App() {
           </ProtectedRoute>
         }
       />
-      <Route
-        path="/verification"
-        element={
-          <ProtectedRoute>
-            <VerificationPage />
-          </ProtectedRoute>
-        }
-      />
+      <Route path="/verify/:certId" element={<VerificationPage />} />
+      <Route path="/verification" element={<Navigate to="/verify/DEMO-PRIYA-2024" replace />} />
       <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>
     </>

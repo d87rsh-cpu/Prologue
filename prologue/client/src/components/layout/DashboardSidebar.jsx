@@ -6,6 +6,7 @@ import {
   Calendar,
   FileText,
   BarChart2,
+  Trophy,
   Settings,
   MessageCircle,
 } from 'lucide-react';
@@ -31,6 +32,7 @@ const navItems = [
   { to: '/dashboard', icon: Calendar, label: 'Calendar' },
   { to: '/dashboard', icon: FileText, label: 'Documents' },
   { to: '/scores', icon: BarChart2, label: 'My Scores' },
+  { to: '/completed', icon: Trophy, label: 'Completed Projects' },
   { to: '/dashboard', icon: Settings, label: 'Settings' },
 ];
 
@@ -72,7 +74,7 @@ export default function DashboardSidebar() {
 
       <nav className="flex-1 overflow-auto p-3 flex flex-col gap-0.5">
         {navItems.map(({ to, icon: Icon, label, badge, badgeFromContext }, i) => {
-          const useActive = to === '/dashboard' || to === '/messaging' || to === '/scores';
+          const useActive = to === '/dashboard' || to === '/messaging' || to === '/scores' || to === '/completed';
           const showBadge = badgeFromContext ? messagesBadge : (badge != null && badge > 0);
           return (
             <NavLink
