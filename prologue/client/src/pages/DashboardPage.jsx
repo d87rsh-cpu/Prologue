@@ -16,27 +16,8 @@ import {
 import { ROLES } from '../data/roles';
 import { BOT_PERSONAS } from '../data/botPersonas';
 import Button from '../components/ui/Button';
-
-const ACTIVE_PROJECT_KEY = 'prologue_active_project';
-const USER_KEY = 'prologue_user';
-
-function getStoredUser() {
-  try {
-    const raw = localStorage.getItem(USER_KEY);
-    return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
-  }
-}
-
-function getActiveProject() {
-  try {
-    const raw = localStorage.getItem(ACTIVE_PROJECT_KEY);
-    return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
-  }
-}
+import { useAuth } from '../hooks/useAuth';
+import { useActiveProject } from '../hooks/useActiveProject';
 
 function getGreeting() {
   const h = new Date().getHours();
@@ -62,8 +43,8 @@ const ACTIVITY_ITEMS = [
 
 export default function DashboardPage() {
   const navigate = useNavigate();
-  const user = getStoredUser();
-  const project = getActiveProject();
+  const { user } = useAuth();
+  const { project } = useActiveProject();
   const tasksFromProject = project?.tasks ?? [];
   const defaultTasks = [
     { id: 'd1', title: 'Set up project and design system', description: 'Initialize repo, add design tokens and folder structure.', milestone: 'Milestone 1: Setup' },
@@ -87,7 +68,7 @@ export default function DashboardPage() {
     return o;
   });
 
-  const teamRoles = project?.teamRolesNeeded ?? [];
+  const teamRoles = project?.teamRolesNeeded ?? project?.team_roles_needed ?? [];
   const teamMembers = useMemo(() => {
     const list = [];
     teamRoles.forEach((roleId) => {

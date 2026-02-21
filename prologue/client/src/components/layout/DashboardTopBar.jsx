@@ -2,27 +2,8 @@ import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Bell } from 'lucide-react';
 import { PROJECTS } from '../../data/projects';
-
-const USER_KEY = 'prologue_user';
-const ACTIVE_PROJECT_KEY = 'prologue_active_project';
-
-function getStoredUser() {
-  try {
-    const raw = localStorage.getItem(USER_KEY);
-    return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
-  }
-}
-
-function getActiveProject() {
-  try {
-    const raw = localStorage.getItem(ACTIVE_PROJECT_KEY);
-    return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
-  }
-}
+import { useAuth } from '../../hooks/useAuth';
+import { useActiveProject } from '../../hooks/useActiveProject';
 
 const COMPLEXITY_STYLES = {
   Beginner: 'bg-success/20 text-success border-success/40',
@@ -34,8 +15,8 @@ export default function DashboardTopBar() {
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
-  const user = getStoredUser();
-  const project = getActiveProject();
+  const { user, signOut } = useAuth();
+  const { project } = useActiveProject();
 
   useEffect(() => {
     function handleClickOutside(e) {
@@ -50,7 +31,7 @@ export default function DashboardTopBar() {
     : '?';
   const projectTitle = project?.projectTitle ?? 'No project selected';
   const proj = project?.projectId ? PROJECTS.find((p) => p.id === project.projectId) : null;
-  const complexity = proj?.complexity ?? project?.complexity ?? 'Beginner';
+  const complexity = proj?.complexity ?? 'Beginner';
 
   return (
     <header className="h-[60px] border-b border-border bg-primary flex items-center justify-between px-6 shrink-0 fixed top-0 left-0 right-0 z-30">
@@ -101,7 +82,7 @@ export default function DashboardTopBar() {
               <button
                 type="button"
                 className="w-full px-4 py-2 text-left text-sm text-text-primary hover:bg-secondary"
-                onClick={() => { setMenuOpen(false); navigate('/'); }}
+                onClick={() => { setMenuOpen(false); signOut(); navigate('/login'); }}
               >
                 Logout
               </button>

@@ -5,18 +5,9 @@ import { PROJECTS } from '../data/projects';
 import { ROLES } from '../data/roles';
 import { DOMAINS } from '../data/domains';
 import Button from '../components/ui/Button';
+import { useAuth } from '../hooks/useAuth';
 
-const USER_KEY = 'prologue_user';
 const ONBOARDING_KEY = 'prologue_onboarding';
-
-function getStoredUser() {
-  try {
-    const raw = localStorage.getItem(USER_KEY);
-    return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
-  }
-}
 
 function getStoredOnboarding() {
   try {
@@ -37,9 +28,9 @@ const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 export default function ProjectSelectionPage() {
   const navigate = useNavigate();
-  const user = getStoredUser();
+  const { user } = useAuth();
   const onboarding = getStoredOnboarding();
-  const roleId = onboarding?.roleId;
+  const roleId = user?.role_id ?? onboarding?.roleId;
   const userRole = ROLES.find((r) => r.id === roleId);
 
   const [complexityFilter, setComplexityFilter] = useState('All');
@@ -71,7 +62,7 @@ export default function ProjectSelectionPage() {
         </div>
         <div className="flex items-center gap-3">
           <span className="text-sm text-text-secondary">
-            {user?.name ?? 'Guest'} · {user?.employeeId ?? '—'}
+            {user?.name ?? 'Guest'} · {user?.employee_id ?? '—'}
           </span>
           <div className="w-8 h-8 rounded-full bg-accent flex items-center justify-center text-xs font-medium text-text-primary">
             {user?.name ? user.name.trim().split(/\s+/).map((s) => s[0]).join('').slice(0, 2).toUpperCase() : '?'}

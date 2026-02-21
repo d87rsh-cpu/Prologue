@@ -1,13 +1,13 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { PROJECTS } from '../data/projects';
 import { ROLES } from '../data/roles';
 import { BOT_PERSONAS } from '../data/botPersonas';
 import Button from '../components/ui/Button';
+import { useAuth } from '../hooks/useAuth';
+import { supabase } from '../lib/supabase';
 
-const USER_KEY = 'prologue_user';
 const ONBOARDING_KEY = 'prologue_onboarding';
-const ACTIVE_PROJECT_KEY = 'prologue_active_project';
 
 const PROJECT_TYPES = [
   'Web App',
@@ -23,15 +23,6 @@ const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 const HOURS_PER_TASK = 2;
 const DEFAULT_TASKS_CUSTOM = 40;
-
-function getStoredUser() {
-  try {
-    const raw = localStorage.getItem(USER_KEY);
-    return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
-  }
-}
 
 function getStoredOnboarding() {
   try {
@@ -57,14 +48,14 @@ function formatDateInput(date) {
 export default function PRDFormPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const { user } = useAuth();
   const type = searchParams.get('type') || 'custom';
   const projectId = searchParams.get('projectId');
   const isRecommended = type === 'recommended' && projectId;
   const project = isRecommended ? PROJECTS.find((p) => p.id === projectId) : null;
 
-  const user = getStoredUser();
   const onboarding = getStoredOnboarding();
-  const userRoleId = onboarding?.roleId;
+  const userRoleId = user?.role_id ?? onboarding?.roleId;
 
   const [projectTitle, setProjectTitle] = useState('');
   const [oneLiner, setOneLiner] = useState('');
@@ -77,6 +68,8 @@ export default function PRDFormPage() {
   const [hoursPerDay, setHoursPerDay] = useState(3);
   const [daysPerWeek, setDaysPerWeek] = useState([]);
   const [inviteEmail, setInviteEmail] = useState('');
+  const [submitLoading, setSubmitLoading] = useState(false);
+  const [submitError, setSubmitError] = useState('');
 
   useEffect(() => {
     const minDate = addWeeks(new Date(), 2);
@@ -124,29 +117,43 @@ export default function PRDFormPage() {
     keyFeatures.filter((f) => f.trim()).length >= 3 &&
     targetDate;
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!canSubmit) return;
+    if (!canSubmit || !user?.id) return;
+    setSubmitError('');
+    setSubmitLoading(true);
     const payload = {
+      user_id: user.id,
       type: isRecommended ? 'recommended' : 'custom',
-      projectId: project?.id ?? null,
-      projectTitle,
-      oneLiner,
-      projectType,
-      myRoleId,
+      project_id: project?.id ?? null,
+      project_title: projectTitle,
+      one_liner: oneLiner,
+      project_type: projectType,
+      my_role_id: myRoleId,
       problem,
-      keyFeatures: keyFeatures.filter((f) => f.trim()),
-      outOfScope,
-      targetDate,
-      hoursPerDay,
-      daysPerWeek,
-      inviteEmail: inviteEmail.trim() || null,
-      teamRolesNeeded: project?.team_roles_needed ?? [],
+      key_features: keyFeatures.filter((f) => f.trim()),
+      out_of_scope: outOfScope,
+      target_date: targetDate,
+      hours_per_day: hoursPerDay,
+      days_per_week: daysPerWeek,
+      invite_email: inviteEmail.trim() || null,
+      team_roles_needed: project?.team_roles_needed ?? [],
       tasks: project?.tasks ?? [],
-      submittedAt: new Date().toISOString(),
+      submitted_at: new Date().toISOString(),
     };
-    localStorage.setItem(ACTIVE_PROJECT_KEY, JSON.stringify(payload));
-    navigate('/dashboard');
+    try {
+      const { data, error } = await supabase
+        .from('user_projects')
+        .insert(payload)
+        .select('id')
+        .single();
+      if (error) throw error;
+      navigate('/dashboard', { state: { projectId: data?.id } });
+    } catch (err) {
+      setSubmitError(err?.message || 'Failed to save project. Please try again.');
+    } finally {
+      setSubmitLoading(false);
+    }
   };
 
   const today = new Date();
@@ -406,13 +413,14 @@ export default function PRDFormPage() {
 
             {/* Section 5 — Confirmation */}
             <section className="pt-4">
+              {submitError && <p className="text-sm text-red-500 mb-3">{submitError}</p>}
               <Button
                 type="submit"
-                disabled={!canSubmit}
+                disabled={!canSubmit || submitLoading}
                 className="w-full"
                 size="lg"
               >
-                Submit PRD & Start Project →
+                {submitLoading ? 'Saving…' : 'Submit PRD & Start Project →'}
               </Button>
             </section>
           </form>

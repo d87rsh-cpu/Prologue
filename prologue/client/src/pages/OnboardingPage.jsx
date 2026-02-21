@@ -1,6 +1,8 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useAuth } from '../hooks/useAuth';
+import { supabase } from '../lib/supabase';
 import {
   Briefcase,
   Building2,
@@ -25,8 +27,6 @@ import { DOMAINS } from '../data/domains';
 
 const ONBOARDING_STEPS = ['Meet Your HR', 'About Yourself', 'Select Role', "You're all set"];
 const STORAGE_KEY = 'prologue_onboarding';
-const STORAGE_COMPLETE_KEY = 'prologue_onboarding_complete';
-const USER_KEY = 'prologue_user';
 
 const ROLE_ICON_MAP = {
   Monitor,
@@ -51,15 +51,6 @@ const GOAL_OPTIONS = [
   { id: 'portfolio', label: 'Build a strong portfolio', icon: Layers },
   { id: 'skills', label: 'Learn industry skills', icon: BookOpen },
 ];
-
-function getStoredUser() {
-  try {
-    const raw = localStorage.getItem(USER_KEY);
-    return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
-  }
-}
 
 function getStoredOnboarding() {
   try {
@@ -96,11 +87,12 @@ function Typewriter({ text, speed = 25, onComplete }) {
 
 export default function OnboardingPage() {
   const navigate = useNavigate();
-  const user = getStoredUser();
+  const { user } = useAuth();
   const stored = getStoredOnboarding();
 
   const [step, setStep] = useState(1);
   const [fullName, setFullName] = useState(stored?.fullName ?? user?.name ?? '');
+  const [completing, setCompleting] = useState(false);
   const [college, setCollege] = useState(stored?.college ?? '');
   const [yearOfStudy, setYearOfStudy] = useState(stored?.yearOfStudy ?? '');
   const [primaryGoal, setPrimaryGoal] = useState(stored?.primaryGoal ?? '');
@@ -137,11 +129,25 @@ export default function OnboardingPage() {
     });
   };
 
-  const handleNext = () => {
+  const handleNext = async () => {
     if (step === 2) persistStep2();
     if (step === 3) persistStep3();
     if (step === 4) {
-      localStorage.setItem(STORAGE_COMPLETE_KEY, 'true');
+      if (!user?.id) {
+        navigate('/projects');
+        return;
+      }
+      setCompleting(true);
+      try {
+        await supabase
+          .from('users')
+          .update({
+            onboarding_complete: true,
+            role_id: selectedRoleId || null,
+          })
+          .eq('id', user.id);
+      } catch (_) {}
+      setCompleting(false);
       navigate('/projects');
       return;
     }
@@ -152,9 +158,6 @@ export default function OnboardingPage() {
 
   const selectedRole = ROLES.find((r) => r.id === selectedRoleId);
 
-  useEffect(() => {
-    if (step === 4) localStorage.setItem(STORAGE_COMPLETE_KEY, 'true');
-  }, [step]);
 
   return (
     <div className="min-h-screen flex bg-primary">
@@ -409,12 +412,12 @@ export default function OnboardingPage() {
                   Welcome aboard, {fullName || 'there'}.
                 </h2>
                 <p className="mt-2 text-text-secondary">
-                  Your Employee ID is <strong className="text-text-primary">{user?.employeeId ?? '—'}</strong>.
+                  Your Employee ID is <strong className="text-text-primary">{user?.employee_id ?? '—'}</strong>.
                   You've been registered as a <strong className="text-text-primary">{selectedRole?.title ?? '—'}</strong>.
                 </p>
                 <p className="mt-1 text-sm text-text-secondary">Let's get you your first project.</p>
-                <Button onClick={handleNext} className="mt-6" size="lg">
-                  View Project Recommendations <ChevronRight className="w-4 h-4 ml-1 inline" />
+                <Button onClick={handleNext} className="mt-6" size="lg" disabled={completing}>
+                  {completing ? 'Saving…' : 'View Project Recommendations'} <ChevronRight className="w-4 h-4 ml-1 inline" />
                 </Button>
                 <div className="mt-10 grid grid-cols-1 sm:grid-cols-3 gap-4 text-left">
                   <div className="p-4 rounded-lg border border-border bg-card-bg">

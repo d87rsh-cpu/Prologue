@@ -10,18 +10,9 @@ import {
   MessageCircle,
 } from 'lucide-react';
 import { ROLES } from '../../data/roles';
+import { useAuth } from '../../hooks/useAuth';
 
-const USER_KEY = 'prologue_user';
 const ONBOARDING_KEY = 'prologue_onboarding';
-
-function getStoredUser() {
-  try {
-    const raw = localStorage.getItem(USER_KEY);
-    return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
-  }
-}
 
 function getStoredOnboarding() {
   try {
@@ -43,9 +34,9 @@ const navItems = [
 ];
 
 export default function DashboardSidebar() {
-  const user = getStoredUser();
+  const { user } = useAuth();
   const onboarding = getStoredOnboarding();
-  const roleId = onboarding?.roleId;
+  const roleId = user?.role_id ?? onboarding?.roleId;
   const role = ROLES.find((r) => r.id === roleId);
   const initials = user?.name
     ? user.name.trim().split(/\s+/).map((s) => s[0]).join('').slice(0, 2).toUpperCase()
@@ -60,7 +51,7 @@ export default function DashboardSidebar() {
           </div>
           <div className="min-w-0">
             <p className="font-medium text-text-primary truncate">{user?.name ?? 'Guest'}</p>
-            <p className="text-xs text-text-secondary truncate">{user?.employeeId ?? '—'}</p>
+            <p className="text-xs text-text-secondary truncate">{user?.employee_id ?? '—'}</p>
             {role && (
               <span
                 className="inline-block mt-1 px-2 py-0.5 rounded text-xs font-medium border"

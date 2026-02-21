@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Copy, Check } from 'lucide-react';
+import { Copy, Check, Loader2 } from 'lucide-react';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
+import { useAuth } from '../hooks/useAuth';
+import { supabase } from '../lib/supabase';
 
 const STAT_PILLS = [
   '2,400+ Projects Completed',
@@ -11,34 +13,18 @@ const STAT_PILLS = [
   '150+ Companies Trust Us',
 ];
 
-function generateEmployeeId() {
-  const year = new Date().getFullYear();
-  const digits = Math.floor(10000 + Math.random() * 90000);
-  return `PRO-${year}-${digits}`;
+function getOnboardingComplete(user) {
+  return user?.onboarding_complete === true;
 }
 
-function getStoredUser() {
-  try {
-    const raw = localStorage.getItem('prologue_user');
-    return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
-  }
-}
-
-function persistUser(user) {
-  localStorage.setItem('prologue_user', JSON.stringify(user));
-}
-
-function completeAuth(employeeId, name, email) {
-  const user = { employeeId, name: name || '', email: email || '' };
-  persistUser(user);
-  const onboardingComplete = localStorage.getItem('prologue_onboarding_complete') === 'true';
-  return onboardingComplete ? '/dashboard' : '/onboarding';
+function getRedirectPath(user) {
+  return getOnboardingComplete(user) ? '/dashboard' : '/onboarding';
 }
 
 export default function LoginPage() {
   const navigate = useNavigate();
+  const { signUp, signInWithEmployeeId, signOut, loading: authLoading } = useAuth();
+
   const [tab, setTab] = useState('login');
   const [loginEmployeeId, setLoginEmployeeId] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
@@ -48,29 +34,33 @@ export default function LoginPage() {
   const [signupConfirm, setSignupConfirm] = useState('');
   const [signupSuccess, setSignupSuccess] = useState(false);
   const [generatedId, setGeneratedId] = useState('');
-  const [signupNameForRedirect, setSignupNameForRedirect] = useState('');
-  const [signupEmailForRedirect, setSignupEmailForRedirect] = useState('');
   const [loginError, setLoginError] = useState('');
   const [signupError, setSignupError] = useState('');
   const [copied, setCopied] = useState(false);
+  const [submitLoading, setSubmitLoading] = useState(false);
 
-  const handleLogin = (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
     setLoginError('');
-    const user = getStoredUser();
-    if (!user) {
-      setLoginError('No account found with this Employee ID.');
-      return;
+    setSubmitLoading(true);
+    try {
+      await signInWithEmployeeId(loginEmployeeId, loginPassword);
+      const { data: { user: sessionUser } } = await supabase.auth.getUser();
+      let profile = null;
+      if (sessionUser) {
+        const { data } = await supabase.from('users').select('*').eq('id', sessionUser.id).single();
+        profile = data;
+      }
+      const user = profile ? { ...sessionUser, ...profile } : sessionUser;
+      navigate(getRedirectPath(user));
+    } catch (err) {
+      setLoginError(err?.message || 'Invalid Employee ID or password.');
+    } finally {
+      setSubmitLoading(false);
     }
-    if (user.employeeId !== loginEmployeeId.trim()) {
-      setLoginError('Invalid Employee ID or password.');
-      return;
-    }
-    const path = completeAuth(user.employeeId, user.name, user.email);
-    navigate(path);
   };
 
-  const handleSignup = (e) => {
+  const handleSignup = async (e) => {
     e.preventDefault();
     setSignupError('');
     if (!signupName.trim()) {
@@ -89,21 +79,20 @@ export default function LoginPage() {
       setSignupError('Passwords do not match.');
       return;
     }
-    const employeeId = generateEmployeeId();
-    setGeneratedId(employeeId);
-    setSignupNameForRedirect(signupName.trim());
-    setSignupEmailForRedirect(signupEmail.trim());
-    persistUser({
-      employeeId,
-      name: signupName.trim(),
-      email: signupEmail.trim(),
-    });
-    setSignupSuccess(true);
+    setSubmitLoading(true);
+    try {
+      const { employeeId } = await signUp(signupName.trim(), signupEmail.trim(), signupPassword);
+      setGeneratedId(employeeId);
+      setSignupSuccess(true);
+    } catch (err) {
+      setSignupError(err?.message || 'Sign up failed. Please try again.');
+    } finally {
+      setSubmitLoading(false);
+    }
   };
 
   const handleEnterPrologue = () => {
-    const path = completeAuth(generatedId, signupNameForRedirect, signupEmailForRedirect);
-    navigate(path);
+    navigate('/onboarding');
   };
 
   const handleCopyId = () => {
@@ -113,6 +102,14 @@ export default function LoginPage() {
       setTimeout(() => setCopied(false), 2000);
     }
   };
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-secondary">
+        <Loader2 className="w-10 h-10 animate-spin text-accent" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex">
@@ -204,9 +201,9 @@ export default function LoginPage() {
                         error={!!loginError}
                       />
                     </div>
-                    {loginError && <p className="text-sm text-highlight">{loginError}</p>}
-                    <Button type="submit" className="w-full" size="lg">
-                      Login
+                    {loginError && <p className="text-sm text-red-500">{loginError}</p>}
+                    <Button type="submit" className="w-full" size="lg" disabled={submitLoading}>
+                      {submitLoading ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : 'Login'}
                     </Button>
                   </form>
                 ) : (
@@ -250,9 +247,9 @@ export default function LoginPage() {
                         error={!!signupError}
                       />
                     </div>
-                    {signupError && <p className="text-sm text-highlight">{signupError}</p>}
-                    <Button type="submit" className="w-full" size="lg">
-                      Create Account & Get Employee ID
+                    {signupError && <p className="text-sm text-red-500">{signupError}</p>}
+                    <Button type="submit" className="w-full" size="lg" disabled={submitLoading}>
+                      {submitLoading ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : 'Create Account & Get Employee ID'}
                     </Button>
                   </form>
                 )}
@@ -277,7 +274,7 @@ export default function LoginPage() {
                     {copied ? <Check className="w-5 h-5 text-success" /> : <Copy className="w-5 h-5" />}
                   </button>
                 </div>
-                <p className="text-xs text-text-secondary">Save this ID — you’ll use it to log in.</p>
+                <p className="text-xs text-text-secondary">Save this ID — you'll use it to log in.</p>
                 <Button onClick={handleEnterPrologue} className="w-full" size="lg">
                   Enter Prologue
                 </Button>

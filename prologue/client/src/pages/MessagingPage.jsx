@@ -3,17 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { PenSquare, Info, Paperclip, Send, MessageCircle } from 'lucide-react';
 import { ROLES } from '../data/roles';
 import { BOT_PERSONAS } from '../data/botPersonas';
-
-const ACTIVE_PROJECT_KEY = 'prologue_active_project';
-
-function getActiveProject() {
-  try {
-    const raw = localStorage.getItem(ACTIVE_PROJECT_KEY);
-    return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
-  }
-}
+import { useActiveProject } from '../hooks/useActiveProject';
 
 const MANAGER = {
   id: 'arjun',
@@ -27,9 +17,8 @@ const MANAGER = {
   color: '#0F3460',
 };
 
-function buildTeamContacts() {
-  const project = getActiveProject();
-  const roleIds = project?.teamRolesNeeded ?? ['frontend_dev', 'backend_dev'];
+function buildTeamContacts(project) {
+  const roleIds = project?.teamRolesNeeded ?? project?.team_roles_needed ?? ['frontend_dev', 'backend_dev'];
   return roleIds.slice(0, 4).map((roleId) => {
     const role = ROLES.find((r) => r.id === roleId);
     const persona = BOT_PERSONAS.find((p) => p.roleId === roleId);
@@ -80,12 +69,13 @@ const MOCK_MESSAGES = {
 
 export default function MessagingPage() {
   const [searchParams, setSearchParams] = useSearchParams();
+  const { project } = useActiveProject();
   const contactParam = searchParams.get('contact');
   const [selectedId, setSelectedId] = useState(contactParam || null);
   const [contextOpen, setContextOpen] = useState(true);
   const [inputValue, setInputValue] = useState('');
 
-  const teamContacts = buildTeamContacts();
+  const teamContacts = buildTeamContacts(project);
   const allContacts = [MANAGER, ...teamContacts, GOSSIP_BUDDY];
 
   useEffect(() => {

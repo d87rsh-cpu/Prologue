@@ -1,19 +1,10 @@
 import { useMemo } from 'react';
 import { QrCode, Download, Share2 } from 'lucide-react';
 import Button from '../components/ui/Button';
+import { useAuth } from '../hooks/useAuth';
+import { useActiveProject } from '../hooks/useActiveProject';
 
-const USER_KEY = 'prologue_user';
 const ONBOARDING_KEY = 'prologue_onboarding';
-const ACTIVE_PROJECT_KEY = 'prologue_active_project';
-
-function getStoredUser() {
-  try {
-    const raw = localStorage.getItem(USER_KEY);
-    return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
-  }
-}
 
 function getStoredOnboarding() {
   try {
@@ -24,18 +15,9 @@ function getStoredOnboarding() {
   }
 }
 
-function getActiveProject() {
-  try {
-    const raw = localStorage.getItem(ACTIVE_PROJECT_KEY);
-    return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
-  }
-}
-
-function getRoleTitle(roleId) {
+function getRoleTitle(roleId, user) {
   const onboarding = getStoredOnboarding();
-  const id = roleId ?? onboarding?.roleId;
+  const id = roleId ?? user?.role_id ?? onboarding?.roleId;
   const roles = [
     { id: 'frontend_dev', title: 'Frontend Developer' },
     { id: 'backend_dev', title: 'Backend Developer' },
@@ -52,8 +34,8 @@ function getRoleTitle(roleId) {
 }
 
 export default function CertificatePage() {
-  const user = getStoredUser();
-  const project = getActiveProject();
+  const { user } = useAuth();
+  const { project } = useActiveProject();
   const certId = useMemo(() => `CERT-${Math.floor(100000 + Math.random() * 900000)}`, []);
   const issueDate = new Date().toLocaleDateString('en-US', {
     year: 'numeric',
@@ -62,7 +44,7 @@ export default function CertificatePage() {
   });
   const userName = user?.name ?? 'Participant';
   const projectTitle = project?.projectTitle ?? 'Project';
-  const roleTitle = getRoleTitle(project?.myRoleId);
+  const roleTitle = getRoleTitle(project?.myRoleId, user);
   const finalScore = 82;
   const grade = finalScore >= 80 ? 'A' : finalScore >= 70 ? 'B' : 'C';
 

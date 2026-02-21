@@ -1,4 +1,6 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
+import { useAuth } from './hooks/useAuth';
+import ProtectedRoute from './components/ProtectedRoute';
 import LoginPage from './pages/LoginPage';
 import OnboardingPage from './pages/OnboardingPage';
 import RoleSelectionPage from './pages/RoleSelectionPage';
@@ -12,28 +14,99 @@ import VerificationPage from './pages/VerificationPage';
 import AppShell from './components/layout/AppShell';
 import DashboardLayout from './components/layout/DashboardLayout';
 
+function RedirectFromRoot() {
+  const { user, loading } = useAuth();
+  if (loading) return null;
+  if (!user) return <Navigate to="/login" replace />;
+  return <Navigate to={user.onboarding_complete ? '/dashboard' : '/onboarding'} replace />;
+}
+
 export default function App() {
   return (
     <Routes>
-      <Route path="/" element={<LoginPage />} />
-      <Route path="/onboarding" element={<OnboardingPage />} />
-      <Route path="/role-selection" element={<RoleSelectionPage />} />
-      <Route path="/projects" element={<ProjectSelectionPage />} />
+      <Route path="/login" element={<LoginPage />} />
+      <Route path="/" element={<RedirectFromRoot />} />
+      <Route
+        path="/onboarding"
+        element={
+          <ProtectedRoute>
+            <OnboardingPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/role-selection"
+        element={
+          <ProtectedRoute>
+            <RoleSelectionPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/projects"
+        element={
+          <ProtectedRoute>
+            <ProjectSelectionPage />
+          </ProtectedRoute>
+        }
+      />
       <Route path="/project-selection" element={<Navigate to="/projects" replace />} />
-      <Route path="/prd" element={<PRDFormPage />} />
+      <Route
+        path="/prd"
+        element={
+          <ProtectedRoute>
+            <PRDFormPage />
+          </ProtectedRoute>
+        }
+      />
       <Route path="/prd-form" element={<Navigate to="/prd" replace />} />
-      <Route path="/dashboard" element={<DashboardLayout />}>
+      <Route
+        path="/dashboard"
+        element={
+          <ProtectedRoute>
+            <DashboardLayout />
+          </ProtectedRoute>
+        }
+      >
         <Route index element={<DashboardPage />} />
       </Route>
-      <Route path="/messaging" element={<AppShell />}>
+      <Route
+        path="/messaging"
+        element={
+          <ProtectedRoute>
+            <AppShell />
+          </ProtectedRoute>
+        }
+      >
         <Route index element={<MessagingPage />} />
       </Route>
-      <Route path="/scores" element={<AppShell />}>
+      <Route
+        path="/scores"
+        element={
+          <ProtectedRoute>
+            <AppShell />
+          </ProtectedRoute>
+        }
+      >
         <Route index element={<ScoresPage />} />
       </Route>
-      <Route path="/certificate" element={<CertificatePage />} />
-      <Route path="/verification" element={<VerificationPage />} />
-      <Route path="*" element={<Navigate to="/" replace />} />
+      <Route
+        path="/certificate"
+        element={
+          <ProtectedRoute>
+            <CertificatePage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/verification"
+        element={
+          <ProtectedRoute>
+            <VerificationPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>
   );
 }
