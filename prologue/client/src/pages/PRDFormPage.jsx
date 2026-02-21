@@ -122,8 +122,10 @@ export default function PRDFormPage() {
     if (!canSubmit || !user?.id) return;
     setSubmitError('');
     setSubmitLoading(true);
+    const taskTemplates = project?.tasks ?? [];
     const payload = {
       user_id: user.id,
+      status: 'active',
       type: isRecommended ? 'recommended' : 'custom',
       project_id: project?.id ?? null,
       project_title: projectTitle,
@@ -138,7 +140,7 @@ export default function PRDFormPage() {
       days_per_week: daysPerWeek,
       invite_email: inviteEmail.trim() || null,
       team_roles_needed: project?.team_roles_needed ?? [],
-      tasks: project?.tasks ?? [],
+      tasks: taskTemplates,
       submitted_at: new Date().toISOString(),
     };
     try {
@@ -148,7 +150,21 @@ export default function PRDFormPage() {
         .select('id')
         .single();
       if (error) throw error;
-      navigate('/dashboard', { state: { projectId: data?.id } });
+      const userProjectId = data?.id;
+      if (userProjectId && taskTemplates.length > 0) {
+        const targetEnd = targetDate ? new Date(targetDate) : new Date();
+        const taskRows = taskTemplates.map((t, i) => ({
+          user_project_id: userProjectId,
+          title: t.title ?? `Task ${i + 1}`,
+          description: t.description ?? '',
+          milestone: t.milestone ?? '',
+          status: 'todo',
+          sort_order: i,
+          due_date: new Date(targetEnd).toISOString().slice(0, 10),
+        }));
+        await supabase.from('tasks').insert(taskRows);
+      }
+      navigate('/dashboard', { state: { projectId: userProjectId } });
     } catch (err) {
       setSubmitError(err?.message || 'Failed to save project. Please try again.');
     } finally {

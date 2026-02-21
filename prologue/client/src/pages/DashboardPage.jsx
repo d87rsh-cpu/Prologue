@@ -5,19 +5,19 @@ import confetti from 'canvas-confetti';
 import {
   TrendingUp,
   Flame,
-  CheckCircle2,
-  MessageCircle,
   ChevronRight,
   FileCheck,
   MessageSquare,
   Trophy,
   LogIn,
+  Loader2,
 } from 'lucide-react';
 import { ROLES } from '../data/roles';
 import { BOT_PERSONAS } from '../data/botPersonas';
 import Button from '../components/ui/Button';
+import Modal from '../components/ui/Modal';
 import { useAuth } from '../hooks/useAuth';
-import { useActiveProject } from '../hooks/useActiveProject';
+import { useProject } from '../hooks/useProject';
 
 function getGreeting() {
   const h = new Date().getHours();
@@ -33,6 +33,12 @@ const STATUS_STYLES = {
   Done: 'bg-success/20 border-success text-success',
 };
 
+const HEALTH_STYLES = {
+  'On Track': 'bg-success/20 text-success border-success/40',
+  'At Risk': 'bg-amber-500/20 text-amber-400 border-amber-500/40',
+  Behind: 'bg-highlight/20 text-highlight border-highlight/40',
+};
+
 const ACTIVITY_ITEMS = [
   { id: 1, avatar: 'PS', name: 'Priya Sharma', text: 'completed: Login UI Wireframe', time: '2 hours ago', icon: FileCheck },
   { id: 2, avatar: 'AN', name: 'Arjun Nair', text: "commented on your task: 'Good progress, ensure the API follows REST standards'", time: '5 hours ago', icon: MessageSquare },
@@ -41,34 +47,32 @@ const ACTIVITY_ITEMS = [
   { id: 5, avatar: 'You', name: 'You', text: 'joined the project', time: '3 days ago', icon: LogIn, projectName: true },
 ];
 
+const MIN_DESCRIPTION_LENGTH = 50;
+
 export default function DashboardPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { project } = useActiveProject();
-  const tasksFromProject = project?.tasks ?? [];
-  const defaultTasks = [
-    { id: 'd1', title: 'Set up project and design system', description: 'Initialize repo, add design tokens and folder structure.', milestone: 'Milestone 1: Setup' },
-    { id: 'd2', title: 'Build core components', description: 'Implement shared UI components and layout.', milestone: 'Milestone 2: Foundation' },
-    { id: 'd3', title: 'Connect to data layer', description: 'Wire up state and API integration.', milestone: 'Milestone 2: Foundation' },
-  ];
-  const sourceTasks = tasksFromProject.length >= 3 ? tasksFromProject : defaultTasks;
-  const todayTasks = sourceTasks.slice(0, 3).map((t) => ({
-    ...t,
-    dueTime: '6:00 PM today',
-    statusKey: `task-${t.id}`,
-  }));
-  const upcomingTasks = sourceTasks.slice(3, 6).map((t, i) => ({
-    ...t,
-    dueDate: ['Tomorrow', 'Wed', 'Thu'][i] ?? 'This week',
-  }));
+  const {
+    project,
+    tasks,
+    todaysTasks,
+    updateTaskStatus,
+    submitTaskWork,
+    loading,
+    tasksCompleted,
+    totalTasks,
+    todayScore,
+    streak,
+    projectHealth,
+  } = useProject();
 
-  const [taskStatuses, setTaskStatuses] = useState(() => {
-    const o = {};
-    todayTasks.forEach((t) => { o[t.statusKey] = t.id === todayTasks[0]?.id ? 'In Progress' : 'To Do'; });
-    return o;
-  });
+  const [submitModalTask, setSubmitModalTask] = useState(null);
+  const [submitWorkDescription, setSubmitWorkDescription] = useState('');
+  const [submitAiPercent, setSubmitAiPercent] = useState(0);
+  const [submitLoading, setSubmitLoading] = useState(false);
+  const [submitError, setSubmitError] = useState('');
 
-  const teamRoles = project?.teamRolesNeeded ?? project?.team_roles_needed ?? [];
+  const teamRoles = project?.team_roles_needed ?? project?.teamRolesNeeded ?? [];
   const teamMembers = useMemo(() => {
     const list = [];
     teamRoles.forEach((roleId) => {
@@ -87,23 +91,44 @@ export default function DashboardPage() {
     return list.slice(0, 4);
   }, [teamRoles]);
 
-  const tasksDueToday = 3;
   const currentDate = new Date();
   const dateStr = currentDate.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' });
-  const dayStreak = 4;
-  const projectCompletion = 28;
-  const tasksCompleted = 7;
-  const totalTasks = 25;
-  const todayScore = 72;
-  const projectHealth = 'On Track';
+  const projectCompletion = totalTasks ? Math.round((tasksCompleted / totalTasks) * 100) : 0;
+  const tasksDueToday = todaysTasks.filter((t) => t.statusDb !== 'done').length;
+  const upcomingTasks = tasks.filter((t) => t.statusDb !== 'done').slice(todaysTasks.length, todaysTasks.length + 5);
 
   const fireConfetti = () => {
     confetti({ particleCount: 80, spread: 70, origin: { y: 0.6 } });
   };
 
-  const setTaskStatus = (statusKey, status) => {
-    setTaskStatuses((prev) => ({ ...prev, [statusKey]: status }));
-    if (status === 'Done') fireConfetti();
+  const handleOpenSubmitModal = (task) => {
+    setSubmitModalTask(task);
+    setSubmitWorkDescription('');
+    setSubmitAiPercent(0);
+    setSubmitError('');
+  };
+
+  const handleCloseSubmitModal = () => {
+    setSubmitModalTask(null);
+    setSubmitWorkDescription('');
+    setSubmitAiPercent(0);
+    setSubmitError('');
+  };
+
+  const handleSubmitWork = async (e) => {
+    e.preventDefault();
+    if (!submitModalTask || submitWorkDescription.trim().length < MIN_DESCRIPTION_LENGTH) return;
+    setSubmitError('');
+    setSubmitLoading(true);
+    try {
+      await submitTaskWork(submitModalTask.id, submitWorkDescription.trim(), submitAiPercent, false);
+      fireConfetti();
+      handleCloseSubmitModal();
+    } catch (err) {
+      setSubmitError(err?.message ?? 'Failed to submit. Please try again.');
+    } finally {
+      setSubmitLoading(false);
+    }
   };
 
   const container = {
@@ -119,8 +144,89 @@ export default function DashboardPage() {
     show: { opacity: 1, y: 0 },
   };
 
+  if (loading) {
+    return (
+      <div className="min-h-[60vh] flex items-center justify-center">
+        <Loader2 className="w-10 h-10 animate-spin text-accent" />
+      </div>
+    );
+  }
+
+  if (!project) {
+    return (
+      <div className="p-6 max-w-[1400px] mx-auto">
+        <div className="rounded-lg border border-border bg-card-bg p-8 text-center">
+          <h2 className="text-lg font-semibold text-text-primary">No active project</h2>
+          <p className="text-text-secondary mt-1">Start a project from the project recommendations to see your dashboard.</p>
+          <Button className="mt-4" onClick={() => navigate('/projects')}>
+            Go to Projects
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="p-6 max-w-[1400px] mx-auto">
+      <Modal
+        open={!!submitModalTask}
+        onClose={handleCloseSubmitModal}
+        title={submitModalTask?.title}
+      >
+        <form onSubmit={handleSubmitWork} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-text-secondary mb-1.5">
+              Describe what you built/completed (min {MIN_DESCRIPTION_LENGTH} characters)
+            </label>
+            <textarea
+              value={submitWorkDescription}
+              onChange={(e) => setSubmitWorkDescription(e.target.value)}
+              placeholder="Describe what you built/completed..."
+              rows={4}
+              className="w-full bg-secondary border border-border rounded-lg px-3 py-2 text-text-primary placeholder:text-text-secondary focus:outline-none focus:ring-2 focus:ring-accent"
+              minLength={MIN_DESCRIPTION_LENGTH}
+              required
+            />
+            <p className="text-xs text-text-secondary mt-1">
+              {submitWorkDescription.length} / {MIN_DESCRIPTION_LENGTH} characters
+            </p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-text-secondary mb-1.5">
+              How much of this was done by AI? {submitAiPercent}%
+            </label>
+            <input
+              type="range"
+              min={0}
+              max={100}
+              value={submitAiPercent}
+              onChange={(e) => setSubmitAiPercent(Number(e.target.value))}
+              className="w-full h-2 rounded-lg appearance-none bg-secondary accent-accent"
+            />
+            <p className="text-sm text-text-secondary mt-1">
+              I did <strong className="text-text-primary">{100 - submitAiPercent}%</strong> of this work, AI assisted with <strong className="text-text-primary">{submitAiPercent}%</strong>
+            </p>
+            {submitAiPercent > 60 && (
+              <p className="text-sm text-amber-500 mt-2 px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/30">
+                High AI dependency noted. This will affect your Task Completion Score. Try to push your own understanding first.
+              </p>
+            )}
+          </div>
+          {submitError && <p className="text-sm text-red-500">{submitError}</p>}
+          <div className="flex gap-2 pt-2">
+            <Button type="button" variant="secondary" onClick={handleCloseSubmitModal}>
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              disabled={submitWorkDescription.trim().length < MIN_DESCRIPTION_LENGTH || submitLoading}
+            >
+              {submitLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Submit Task'}
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
       <motion.div variants={container} initial="hidden" animate="show" className="space-y-6">
         {/* Row 1 — Welcome Banner */}
         <motion.section
@@ -136,11 +242,13 @@ export default function DashboardPage() {
               <h1 className="text-xl font-semibold text-text-primary">
                 {getGreeting()}, {user?.name?.split(' ')[0] ?? 'there'}.
               </h1>
-              <p className="text-text-secondary mt-1">You have {tasksDueToday} tasks due today.</p>
+              <p className="text-text-secondary mt-1">
+                You have {tasksDueToday} tasks due today.
+              </p>
             </div>
             <div className="flex items-center gap-6">
               <span className="text-sm text-text-secondary">{dateStr}</span>
-              <span className="text-sm text-text-secondary">Day {dayStreak} of your journey</span>
+              <span className="text-sm text-text-secondary">Day {streak || 1} of your journey</span>
               <div className="relative w-12 h-12">
                 <svg className="w-12 h-12 -rotate-90" viewBox="0 0 36 36">
                   <path
@@ -169,9 +277,9 @@ export default function DashboardPage() {
         <motion.div variants={item} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {[
             { label: 'Tasks Completed', value: `${tasksCompleted}/${totalTasks}`, trend: true },
-            { label: "Today's Score", value: todayScore, suffix: '/100', color: 'text-success' },
-            { label: 'Streak', value: dayStreak, icon: Flame },
-            { label: 'Project Health', value: projectHealth, pill: true, pillStyle: 'bg-success/20 text-success border-success/40' },
+            { label: "Today's Score", value: todayScore ?? '—', suffix: todayScore != null ? '/100' : '', color: 'text-success' },
+            { label: 'Streak', value: streak, icon: Flame },
+            { label: 'Project Health', value: projectHealth, pill: true, pillStyle: HEALTH_STYLES[projectHealth] ?? HEALTH_STYLES['On Track'] },
           ].map((w, i) => (
             <div key={i} className="rounded-lg border border-border bg-card-bg p-4">
               <p className="text-sm text-text-secondary">{w.label}</p>
@@ -180,7 +288,7 @@ export default function DashboardPage() {
                   {w.value}
                   {w.suffix ?? ''}
                 </span>
-                {w.trend && <TrendingUp className="w-4 h-4 text-success shrink-0" />}
+                {w.trend && totalTasks > 0 && <TrendingUp className="w-4 h-4 text-success shrink-0" />}
                 {w.icon && <w.icon className="w-5 h-5 text-highlight shrink-0" />}
                 {w.pill && (
                   <span className={`ml-auto px-2 py-0.5 rounded text-xs font-medium border ${w.pillStyle}`}>
@@ -197,53 +305,67 @@ export default function DashboardPage() {
           <div className="lg:col-span-3 space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold text-text-primary">Today's Tasks</h2>
-              <button type="button" className="text-sm text-accent hover:underline flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => navigate('/projects')}
+                className="text-sm text-accent hover:underline flex items-center gap-1"
+              >
                 View All <ChevronRight className="w-4 h-4" />
               </button>
             </div>
             <div className="space-y-3">
-              {todayTasks.map((task) => {
-                const status = taskStatuses[task.statusKey] ?? 'To Do';
-                return (
-                  <div
-                    key={task.id}
-                    className="rounded-lg border border-border bg-card-bg p-4"
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0 flex-1">
-                        <p className="text-xs text-text-secondary">Task {task.id.slice(-1)}</p>
-                        <h3 className="font-medium text-text-primary mt-0.5">{task.title}</h3>
-                        <p className="text-sm text-text-secondary mt-1 line-clamp-2">{task.description}</p>
-                        <div className="flex flex-wrap items-center gap-2 mt-2">
-                          <span className="px-2 py-0.5 rounded bg-secondary border border-border text-xs text-text-secondary">
-                            {task.milestone}
-                          </span>
-                          <span className="text-xs text-text-secondary">Due by {task.dueTime}</span>
+              {todaysTasks.length === 0 ? (
+                <p className="text-text-secondary text-sm">No tasks right now. Start a project to get tasks.</p>
+              ) : (
+                todaysTasks.map((task) => {
+                  const status = task.status;
+                  return (
+                    <div
+                      key={task.id}
+                      className="rounded-lg border border-border bg-card-bg p-4"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs text-text-secondary">Task</p>
+                          <h3 className="font-medium text-text-primary mt-0.5">{task.title}</h3>
+                          <p className="text-sm text-text-secondary mt-1 line-clamp-2">{task.description}</p>
+                          <div className="flex flex-wrap items-center gap-2 mt-2">
+                            {task.milestone && (
+                              <span className="px-2 py-0.5 rounded bg-secondary border border-border text-xs text-text-secondary">
+                                {task.milestone}
+                              </span>
+                            )}
+                            <span className="text-xs text-text-secondary">Due by {task.dueTime}</span>
+                          </div>
                         </div>
-                      </div>
-                      <div className="flex flex-col items-end gap-2 shrink-0">
-                        <div className="flex rounded-lg border border-border p-0.5 bg-secondary">
-                          {TASK_STATUSES.map((s) => (
-                            <button
-                              key={s}
-                              type="button"
-                              onClick={() => setTaskStatus(task.statusKey, s)}
-                              className={`text-xs font-medium px-2 py-1 rounded-md transition-colors ${status === s ? STATUS_STYLES[s] : 'text-text-secondary hover:text-text-primary'}`}
+                        <div className="flex flex-col items-end gap-2 shrink-0">
+                          <div className="flex rounded-lg border border-border p-0.5 bg-secondary">
+                            {TASK_STATUSES.map((s) => (
+                              <button
+                                key={s}
+                                type="button"
+                                onClick={() => updateTaskStatus(task.id, s)}
+                                className={`text-xs font-medium px-2 py-1 rounded-md transition-colors ${status === s ? STATUS_STYLES[s] : 'text-text-secondary hover:text-text-primary'}`}
+                              >
+                                {s}
+                              </button>
+                            ))}
+                          </div>
+                          {task.statusDb !== 'done' && (status === 'In Progress' || status === 'Done') && (
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => handleOpenSubmitModal(task)}
                             >
-                              {s}
-                            </button>
-                          ))}
+                              Submit Work
+                            </Button>
+                          )}
                         </div>
-                        {(status === 'In Progress' || status === 'Done') && (
-                          <Button variant="secondary" size="sm">
-                            Submit Work
-                          </Button>
-                        )}
                       </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })
+              )}
             </div>
             <div>
               <h3 className="text-sm font-medium text-text-primary mb-2">Upcoming This Week</h3>
@@ -251,7 +373,7 @@ export default function DashboardPage() {
                 {upcomingTasks.map((t) => (
                   <li key={t.id} className="flex items-center justify-between text-sm text-text-secondary">
                     <span className="truncate">{t.title}</span>
-                    <span className="text-xs shrink-0 ml-2">{t.dueDate}</span>
+                    <span className="text-xs shrink-0 ml-2">{t.dueTime}</span>
                   </li>
                 ))}
                 {upcomingTasks.length === 0 && (
@@ -314,17 +436,13 @@ export default function DashboardPage() {
                   const cells = [];
                   for (let i = 0; i < startPad; i++) cells.push(<div key={`pad-${i}`} />);
                   for (let d = 1; d <= daysInMonth; d++) {
-                    const hasTask = [5, 12, 18, 21].includes(d);
                     const isToday = d === today;
                     cells.push(
                       <div
                         key={d}
-                        className={`py-1 rounded ${isToday ? 'bg-highlight text-white' : 'text-text-primary'} ${hasTask ? 'relative' : ''}`}
+                        className={`py-1 rounded ${isToday ? 'bg-highlight text-white' : 'text-text-primary'}`}
                       >
                         {d}
-                        {hasTask && !isToday && (
-                          <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-success" />
-                        )}
                       </div>
                     );
                   }
@@ -348,8 +466,8 @@ export default function DashboardPage() {
                   <p className="text-sm text-text-primary">
                     <span className="font-medium">{a.name}</span>{' '}
                     {a.text}
-                    {a.projectName && project?.projectTitle && (
-                      <>: <span className="font-medium">{project.projectTitle}</span></>
+                    {a.projectName && project?.project_title && (
+                      <>: <span className="font-medium">{project.project_title}</span></>
                     )}
                   </p>
                   <p className="text-xs text-text-secondary mt-0.5">{a.time}</p>
