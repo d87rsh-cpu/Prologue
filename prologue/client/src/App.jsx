@@ -1,4 +1,5 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
+import { Toaster } from 'react-hot-toast';
 import { useAuth } from './hooks/useAuth';
 import ProtectedRoute from './components/ProtectedRoute';
 import LoginPage from './pages/LoginPage';
@@ -23,7 +24,9 @@ function RedirectFromRoot() {
 
 export default function App() {
   return (
-    <Routes>
+    <>
+      <Toaster position="top-center" />
+      <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/" element={<RedirectFromRoot />} />
       <Route
@@ -108,5 +111,6 @@ export default function App() {
       />
       <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>
+    </>
   );
 }

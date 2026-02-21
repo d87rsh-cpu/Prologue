@@ -1,9 +1,11 @@
 import { Outlet } from 'react-router-dom';
+import { MessagesBadgeProvider } from '../../contexts/MessagesBadgeContext';
 import DashboardTopBar from './DashboardTopBar';
 import DashboardSidebar from './DashboardSidebar';
 
 export default function DashboardLayout() {
   return (
+    <MessagesBadgeProvider>
     <div className="min-h-screen flex flex-col bg-primary">
       <DashboardTopBar />
       <div className="flex flex-1 pt-[60px]">
@@ -13,5 +15,6 @@ export default function DashboardLayout() {
         </main>
       </div>
     </div>
+    </MessagesBadgeProvider>
   );
 }

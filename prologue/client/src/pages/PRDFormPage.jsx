@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { PROJECTS } from '../data/projects';
 import { ROLES } from '../data/roles';
-import { BOT_PERSONAS } from '../data/botPersonas';
+import { BOT_PERSONAS_LIST } from '../data/botPersonas';
 import Button from '../components/ui/Button';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
@@ -389,7 +389,7 @@ export default function PRDFormPage() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {project.team_roles_needed.map((roleId) => {
                       const role = ROLES.find((r) => r.id === roleId);
-                      const persona = BOT_PERSONAS.find((p) => p.roleId === roleId);
+                      const persona = BOT_PERSONAS_LIST.find((p) => p.roleId === roleId);
                       const name = persona?.name ?? role?.title ?? roleId;
                       return (
                         <div

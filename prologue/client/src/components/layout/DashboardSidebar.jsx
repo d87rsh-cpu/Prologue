@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { ROLES } from '../../data/roles';
 import { useAuth } from '../../hooks/useAuth';
+import { useMessagesBadge } from '../../contexts/MessagesBadgeContext';
 
 const ONBOARDING_KEY = 'prologue_onboarding';
 
@@ -26,7 +27,7 @@ function getStoredOnboarding() {
 const navItems = [
   { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/dashboard', icon: CheckSquare, label: 'My Tasks' },
-  { to: '/messaging', icon: MessageSquare, label: 'Team Messages', badge: 2 },
+  { to: '/messaging', icon: MessageSquare, label: 'Team Messages', badgeFromContext: true },
   { to: '/dashboard', icon: Calendar, label: 'Calendar' },
   { to: '/dashboard', icon: FileText, label: 'Documents' },
   { to: '/scores', icon: BarChart2, label: 'My Scores' },
@@ -35,6 +36,7 @@ const navItems = [
 
 export default function DashboardSidebar() {
   const { user } = useAuth();
+  const { messagesBadge } = useMessagesBadge();
   const onboarding = getStoredOnboarding();
   const roleId = user?.role_id ?? onboarding?.roleId;
   const role = ROLES.find((r) => r.id === roleId);
@@ -69,8 +71,9 @@ export default function DashboardSidebar() {
       </div>
 
       <nav className="flex-1 overflow-auto p-3 flex flex-col gap-0.5">
-        {navItems.map(({ to, icon: Icon, label, badge }, i) => {
+        {navItems.map(({ to, icon: Icon, label, badge, badgeFromContext }, i) => {
           const useActive = to === '/dashboard' || to === '/messaging' || to === '/scores';
+          const showBadge = badgeFromContext ? messagesBadge : (badge != null && badge > 0);
           return (
             <NavLink
               key={`${to}-${label}`}
@@ -84,9 +87,9 @@ export default function DashboardSidebar() {
             >
               <Icon className="w-5 h-5 shrink-0" />
               <span className="flex-1 truncate">{label}</span>
-              {badge != null && (
+              {showBadge && (
                 <span className="min-w-[18px] h-[18px] rounded-full bg-highlight text-white text-xs flex items-center justify-center">
-                  {badge}
+                  {badgeFromContext ? '!' : badge}
                 </span>
               )}
             </NavLink>

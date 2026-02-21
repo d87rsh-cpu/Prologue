@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import confetti from 'canvas-confetti';
@@ -13,11 +13,13 @@ import {
   Loader2,
 } from 'lucide-react';
 import { ROLES } from '../data/roles';
-import { BOT_PERSONAS } from '../data/botPersonas';
+import { BOT_PERSONAS_LIST } from '../data/botPersonas';
 import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
 import { useAuth } from '../hooks/useAuth';
 import { useProject } from '../hooks/useProject';
+import { useMessagesBadge } from '../contexts/MessagesBadgeContext';
+import { checkAndTriggerBotMessages } from '../lib/botScheduler';
 
 function getGreeting() {
   const h = new Date().getHours();
@@ -66,6 +68,15 @@ export default function DashboardPage() {
     projectHealth,
   } = useProject();
 
+  const { refreshMessagesBadge } = useMessagesBadge();
+
+  useEffect(() => {
+    if (loading || !project?.id || !tasks) return;
+    checkAndTriggerBotMessages(project, tasks, undefined, streak).then(() => {
+      refreshMessagesBadge();
+    });
+  }, [loading, project?.id, streak, refreshMessagesBadge]);
+
   const [submitModalTask, setSubmitModalTask] = useState(null);
   const [submitWorkDescription, setSubmitWorkDescription] = useState('');
   const [submitAiPercent, setSubmitAiPercent] = useState(0);
@@ -77,7 +88,7 @@ export default function DashboardPage() {
     const list = [];
     teamRoles.forEach((roleId) => {
       const role = ROLES.find((r) => r.id === roleId);
-      const persona = BOT_PERSONAS.find((p) => p.roleId === roleId);
+      const persona = BOT_PERSONAS_LIST.find((p) => p.roleId === roleId);
       list.push({
         id: roleId,
         name: persona?.name ?? role?.title ?? roleId,
