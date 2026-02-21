@@ -1,0 +1,49 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --color-primary: #1A1A2E;
+    --color-secondary: #16213E;
+    --color-accent: #0F3460;
+    --color-highlight: #E94560;
+    --color-success: #00B4D8;
+    --text-primary: #EAEAEA;
+    --text-secondary: #A0A0B0;
+    --card-bg: #1E1E35;
+    --border: #2A2A45;
+    --font-sans: 'Inter', system-ui, sans-serif;
+  }
+
+  body {
+    @apply antialiased;
+    background-color: var(--color-primary);
+    color: var(--text-primary);
+    font-family: var(--font-sans);
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: var(--color-secondary);
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 4px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--color-accent);
+  }
+}
