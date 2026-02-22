@@ -5,6 +5,7 @@ import { LineChart, Line, ResponsiveContainer } from 'recharts';
 import { ChevronUp, ChevronDown, Minus } from 'lucide-react';
 import { useScores } from '../hooks/useScores';
 import { useDemoMode } from '../hooks/useDemoMode';
+import { SkeletonScores } from '../components/ui/Skeleton';
 
 const SCORE_CATEGORIES = [
   {
@@ -150,7 +151,19 @@ const DEMO_SCORES = {
 export default function ScoresPage() {
   const navigate = useNavigate();
   const [mounted, setMounted] = useState(false);
-  const { loading: scoresLoading, scores: rawScores, trends, scoreHistory } = useScores();
+  const { loading: scoresLoading, scores: rawScores, trends, scoreHistory, lastUpdatedByType } = useScores();
+
+  function formatRelativeTime(iso) {
+    if (!iso) return null;
+    const d = new Date(iso);
+    const now = new Date();
+    const sec = Math.floor((now - d) / 1000);
+    if (sec < 60) return 'just now';
+    if (sec < 3600) return `${Math.floor(sec / 60)}m ago`;
+    if (sec < 86400) return `${Math.floor(sec / 3600)}h ago`;
+    if (sec < 604800) return `${Math.floor(sec / 86400)}d ago`;
+    return d.toLocaleDateString();
+  }
   const { isDemo } = useDemoMode();
   const scores = isDemo ? DEMO_SCORES : rawScores;
   const loading = isDemo ? false : scoresLoading;
@@ -182,13 +195,12 @@ export default function ScoresPage() {
     return Array.isArray(hist) && hist.length > 0 ? hist : null;
   };
 
-  if (loading) {
-    return (
-      <div className="p-6 max-w-5xl mx-auto flex items-center justify-center min-h-[400px]">
-        <p className="text-text-secondary">Loading scores...</p>
-      </div>
-    );
-  }
+  const getLastUpdated = (cat) => {
+    const key = cat.id === 'delegation' ? 'delegation' : cat.id;
+    return formatRelativeTime(lastUpdatedByType?.[key]);
+  };
+
+  if (loading) return <SkeletonScores />;
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
@@ -204,6 +216,7 @@ export default function ScoresPage() {
           const scoreVal = getScoreForCategory(cat);
           const trend = getTrendForCategory(cat);
           const history = getHistoryForCategory(cat);
+          const lastUpdated = getLastUpdated(cat);
 
           return (
             <motion.div
@@ -241,6 +254,9 @@ export default function ScoresPage() {
                 </div>
               )}
               {history && <SparklineChart data={history} />}
+              {lastUpdated && (
+                <p className="text-xs text-text-secondary mt-2">Last updated: {lastUpdated}</p>
+              )}
             </motion.div>
           );
         })}

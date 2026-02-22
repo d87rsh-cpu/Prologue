@@ -4,8 +4,9 @@ import { Download } from 'lucide-react';
 import QRCode from 'qrcode';
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
-import toast from 'react-hot-toast';
+import { useToast } from '../contexts/ToastContext';
 import Button from '../components/ui/Button';
+import { SkeletonCertificate } from '../components/ui/Skeleton';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
 import { ROLES } from '../data/roles';
@@ -116,6 +117,7 @@ export default function CertificatePage() {
   const [searchParams] = useSearchParams();
   const certIdParam = searchParams.get('certId');
   const { user } = useAuth();
+  const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [project, setProject] = useState(null);
   const [scores, setScores] = useState([]);
@@ -298,13 +300,7 @@ export default function CertificatePage() {
   const projectTitle = demoCert?.projectTitle ?? project?.project_title ?? 'Project';
   const roleTitle = demoCert?.roleTitle ?? getRoleTitle(project?.my_role_id);
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-primary py-12 px-4 flex items-center justify-center">
-        <p className="text-text-secondary">Loading certificate...</p>
-      </div>
-    );
-  }
+  if (loading) return <SkeletonCertificate />;
 
   if (!project && !certIdParam) {
     return (
@@ -328,7 +324,7 @@ export default function CertificatePage() {
         <div
           id="certificate-card"
           ref={certCardRef}
-          className="bg-white rounded-lg shadow-xl overflow-hidden print:shadow-none print:rounded-none"
+          className="paper-texture bg-white rounded-lg shadow-xl overflow-visible print:shadow-none print:rounded-none relative"
           style={{
             maxWidth: 800,
             padding: 48,
@@ -336,6 +332,11 @@ export default function CertificatePage() {
             boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.05), 0 4px 24px rgba(0,0,0,0.15)',
           }}
         >
+          {/* Gold corner accents */}
+          <div className="absolute top-0 left-0 w-12 h-12 border-l-4 border-t-4 border-amber-600/60 rounded-tl-lg" />
+          <div className="absolute top-0 right-0 w-12 h-12 border-r-4 border-t-4 border-amber-600/60 rounded-tr-lg" />
+          <div className="absolute bottom-0 left-0 w-12 h-12 border-l-4 border-b-4 border-amber-600/60 rounded-bl-lg" />
+          <div className="absolute bottom-0 right-0 w-12 h-12 border-r-4 border-b-4 border-amber-600/60 rounded-br-lg" />
           <div className="border-b-2 border-gray-200 pb-6 mb-6">
             <div className="flex items-center justify-center gap-3 mb-4">
               <div
@@ -399,10 +400,17 @@ export default function CertificatePage() {
             </div>
           </div>
 
-          {/* QR code */}
+          {/* QR code with P logo overlay */}
           <div className="flex flex-col items-center">
             {qrDataUrl ? (
-              <img src={qrDataUrl} alt="QR code to verify certificate" className="w-[120px] h-[120px]" />
+              <div className="relative">
+                <img src={qrDataUrl} alt="QR code to verify certificate" className="w-[120px] h-[120px]" />
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <div className="w-8 h-8 rounded bg-white flex items-center justify-center shadow-sm">
+                    <span className="text-sm font-bold" style={{ color: '#0F3460' }}>P</span>
+                  </div>
+                </div>
+              </div>
             ) : (
               <div className="w-[120px] h-[120px] rounded bg-gray-100 border border-gray-300" />
             )}

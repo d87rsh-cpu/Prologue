@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { PenSquare, Info, Paperclip, Send, MessageCircle } from 'lucide-react';
-import toast from 'react-hot-toast';
+import { useSearchParams, useNavigate } from 'react-router-dom';
+import { PenSquare, Info, Paperclip, Send, MessageCircle, MessageSquare } from 'lucide-react';
+import { useToast } from '../contexts/ToastContext';
 import { ROLES } from '../data/roles';
 import { BOT_PERSONAS_LIST } from '../data/botPersonas';
 import { useProject } from '../hooks/useProject';
@@ -9,6 +9,8 @@ import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
 import { sendBotMessage, scoreProfessionalism } from '../lib/gemini';
 import { clearMessagesBadge } from '../lib/botScheduler';
+import EmptyState from '../components/ui/EmptyState';
+import { SkeletonMessagesOnly } from '../components/ui/Skeleton';
 
 const MANAGER_ID = 'manager';
 const MANAGER = {
@@ -66,9 +68,11 @@ function formatMessageTime(iso) {
 }
 
 export default function MessagingPage() {
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { user } = useAuth();
   const { project, tasks, projectHealth, tasksCompleted, totalTasks } = useProject();
+  const { toast } = useToast();
 
   const contactParam = searchParams.get('contact');
   const [selectedId, setSelectedId] = useState(contactParam || null);
@@ -253,10 +257,7 @@ export default function MessagingPage() {
             recipient: recipientBotId,
           });
           if (score < 5) {
-            toast(
-              '💡 Tip: Try to be more specific and professional in your communications. It affects your Communication Score.',
-              { duration: 4000 }
-            );
+            toast.warning('💡 Tip: Try to be more specific and professional in your communications. It affects your Communication Score.');
           }
         }
       } else {
@@ -425,8 +426,14 @@ export default function MessagingPage() {
       {/* Column 2 — Chat */}
       <div className="flex-1 flex flex-col min-w-0 bg-primary">
         {!projectId ? (
-          <div className="flex-1 flex items-center justify-center text-text-secondary">
-            <p>Start a project from the dashboard to message your team.</p>
+          <div className="flex-1 flex items-center justify-center">
+            <EmptyState
+              icon={MessageSquare}
+              title="No project yet"
+              subtitle="Start a project from the dashboard to message your team."
+              actionLabel="Go to Dashboard"
+              onAction={() => navigate('/dashboard')}
+            />
           </div>
         ) : selected ? (
           <>
@@ -466,9 +473,17 @@ export default function MessagingPage() {
               }`}
             >
               {messagesLoading ? (
-                <div className="flex justify-center py-8 text-text-secondary text-sm">Loading messages…</div>
+                <SkeletonMessagesOnly />
               ) : (
                 <>
+                  {messages.length === 0 && !typingBotId ? (
+                    <EmptyState
+                      icon={MessageSquare}
+                      title="No messages yet"
+                      subtitle="Start the conversation by sending a message below."
+                    />
+                  ) : (
+                    <>
                   {messages.map((msg) => {
                     const isMe = msg.from === 'me';
                     return (
@@ -478,6 +493,9 @@ export default function MessagingPage() {
                             className={`rounded-lg px-4 py-2 ${
                               isMe ? 'bg-highlight text-white' : 'bg-card-bg border border-border text-text-primary'
                             }`}
+                            style={{
+                              borderRadius: isMe ? '12px 12px 4px 12px' : '12px 12px 12px 4px',
+                            }}
                           >
                             {msg.text}
                           </div>
@@ -490,12 +508,14 @@ export default function MessagingPage() {
                   })}
                   {typingBotId === selectedId && (
                     <div className="flex justify-start">
-                      <div className="rounded-lg px-4 py-2 bg-card-bg border border-border flex gap-1">
-                        <span className="w-2 h-2 rounded-full bg-text-secondary animate-bounce" style={{ animationDelay: '0ms' }} />
-                        <span className="w-2 h-2 rounded-full bg-text-secondary animate-bounce" style={{ animationDelay: '150ms' }} />
-                        <span className="w-2 h-2 rounded-full bg-text-secondary animate-bounce" style={{ animationDelay: '300ms' }} />
+                      <div className="rounded-lg px-4 py-3 bg-card-bg border border-border flex gap-1.5 items-center">
+                        <span className="typing-dot w-2 h-2 rounded-full bg-text-secondary" />
+                        <span className="typing-dot w-2 h-2 rounded-full bg-text-secondary" />
+                        <span className="typing-dot w-2 h-2 rounded-full bg-text-secondary" />
                       </div>
                     </div>
+                  )}
+                    </>
                   )}
                   <div ref={chatEndRef} />
                 </>
@@ -530,8 +550,12 @@ export default function MessagingPage() {
             </div>
           </>
         ) : (
-          <div className="flex-1 flex items-center justify-center text-text-secondary">
-            <p>Select a contact to start messaging</p>
+          <div className="flex-1 flex items-center justify-center">
+            <EmptyState
+              icon={MessageSquare}
+              title="Select a contact"
+              subtitle="Choose a team member or your manager from the list to start messaging."
+            />
           </div>
         )}
       </div>

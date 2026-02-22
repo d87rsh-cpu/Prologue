@@ -1,5 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { Trophy, Award, ExternalLink, FileCheck } from 'lucide-react';
+import EmptyState from '../components/ui/EmptyState';
+import { SkeletonCompletedProjects } from '../components/ui/Skeleton';
 import { useAuth } from '../hooks/useAuth';
 import { useDemoMode } from '../hooks/useDemoMode';
 import { supabase } from '../lib/supabase';
@@ -140,6 +142,7 @@ function ProjectCard({ project }) {
 }
 
 export default function CompletedProjectsPage() {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const { isDemo } = useDemoMode();
   const [dbProjects, setDbProjects] = useState([]);
@@ -229,14 +232,16 @@ export default function CompletedProjectsPage() {
       </header>
 
       {loading ? (
-        <p className="text-text-secondary">Loading projects...</p>
+        <SkeletonCompletedProjects />
       ) : projects.length === 0 ? (
-        <div className="rounded-lg border border-border bg-card-bg p-12 text-center">
-          <Trophy className="w-16 h-16 mx-auto text-text-secondary opacity-50 mb-4" />
-          <h2 className="text-lg font-semibold text-text-primary">No completed projects yet</h2>
-          <p className="text-text-secondary mt-1">
-            Complete a project to see your certificates here.
-          </p>
+        <div className="rounded-lg border border-border bg-card-bg">
+          <EmptyState
+            icon={Trophy}
+            title="No completed projects yet"
+            subtitle="Complete a project to see your certificates here."
+            actionLabel="Go to Projects"
+            onAction={() => navigate('/projects')}
+          />
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

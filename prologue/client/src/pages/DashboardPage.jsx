@@ -10,16 +10,19 @@ import {
   MessageSquare,
   Trophy,
   LogIn,
-  Loader2,
+  ClipboardList,
 } from 'lucide-react';
 import { ROLES } from '../data/roles';
 import { BOT_PERSONAS_LIST } from '../data/botPersonas';
 import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
+import EmptyState from '../components/ui/EmptyState';
+import { SkeletonDashboard } from '../components/ui/Skeleton';
 import { useAuth } from '../hooks/useAuth';
 import { useProject } from '../hooks/useProject';
 import { useDemoMode } from '../hooks/useDemoMode';
 import { useMessagesBadge } from '../contexts/MessagesBadgeContext';
+import { useToast } from '../contexts/ToastContext';
 import { checkAndTriggerBotMessages } from '../lib/botScheduler';
 
 function getGreeting() {
@@ -34,6 +37,11 @@ const STATUS_STYLES = {
   'To Do': 'bg-card-bg border-border text-text-secondary',
   'In Progress': 'bg-accent/20 border-accent text-text-primary',
   Done: 'bg-success/20 border-success text-success',
+};
+const TASK_BORDER_COLORS = {
+  'To Do': 'border-l-gray-500/60',
+  'In Progress': 'border-l-amber-500',
+  Done: 'border-l-success',
 };
 
 const HEALTH_STYLES = {
@@ -72,6 +80,7 @@ export default function DashboardPage() {
   const displayStreak = demoOverrides?.streak ?? streak;
 
   const { refreshMessagesBadge } = useMessagesBadge();
+  const { toast } = useToast();
 
   useEffect(() => {
     if (loading || !project?.id || !tasks) return;
@@ -137,6 +146,7 @@ export default function DashboardPage() {
     try {
       await submitTaskWork(submitModalTask.id, submitWorkDescription.trim(), submitAiPercent, false);
       fireConfetti();
+      toast.success('Task submitted successfully!');
       handleCloseSubmitModal();
     } catch (err) {
       setSubmitError(err?.message ?? 'Failed to submit. Please try again.');
@@ -158,24 +168,18 @@ export default function DashboardPage() {
     show: { opacity: 1, y: 0 },
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-[60vh] flex items-center justify-center">
-        <Loader2 className="w-10 h-10 animate-spin text-accent" />
-      </div>
-    );
-  }
+  if (loading) return <SkeletonDashboard />;
 
   if (!project) {
     return (
       <div className="p-6 max-w-[1400px] mx-auto">
-        <div className="rounded-lg border border-border bg-card-bg p-8 text-center">
-          <h2 className="text-lg font-semibold text-text-primary">No active project</h2>
-          <p className="text-text-secondary mt-1">Start a project from the project recommendations to see your dashboard.</p>
-          <Button className="mt-4" onClick={() => navigate('/projects')}>
-            Go to Projects
-          </Button>
-        </div>
+        <EmptyState
+          icon={ClipboardList}
+          title="No active project"
+          subtitle="Start a project from the project recommendations to see your dashboard."
+          actionLabel="Go to Projects"
+          onAction={() => navigate('/projects')}
+        />
       </div>
     );
   }
@@ -329,19 +333,26 @@ export default function DashboardPage() {
             </div>
             <div className="space-y-3">
               {todaysTasks.length === 0 ? (
-                <p className="text-text-secondary text-sm">No tasks right now. Start a project to get tasks.</p>
+                <EmptyState
+                  icon={ClipboardList}
+                  title="No tasks assigned yet"
+                  subtitle="Your manager will assign tasks shortly."
+                  actionLabel="Check your messages"
+                  onAction={() => navigate('/messaging')}
+                />
               ) : (
                 todaysTasks.map((task) => {
                   const status = task.status;
+                  const isDone = task.statusDb === 'done';
                   return (
                     <div
                       key={task.id}
-                      className="rounded-lg border border-border bg-card-bg p-4"
+                      className={`rounded-lg border border-border bg-card-bg p-4 border-l-4 ${TASK_BORDER_COLORS[status] ?? TASK_BORDER_COLORS['To Do']} ${isDone ? 'opacity-75' : ''}`}
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0 flex-1">
                           <p className="text-xs text-text-secondary">Task</p>
-                          <h3 className="font-medium text-text-primary mt-0.5">{task.title}</h3>
+                          <h3 className={`font-medium mt-0.5 ${isDone ? 'line-through text-text-secondary' : 'text-text-primary'}`}>{task.title}</h3>
                           <p className="text-sm text-text-secondary mt-1 line-clamp-2">{task.description}</p>
                           <div className="flex flex-wrap items-center gap-2 mt-2">
                             {task.milestone && (
@@ -470,9 +481,13 @@ export default function DashboardPage() {
         {/* Row 4 — Recent Team Activity */}
         <motion.section variants={item}>
           <h2 className="text-lg font-semibold text-text-primary mb-3">Recent Team Activity</h2>
-          <div className="rounded-lg border border-border bg-card-bg divide-y divide-border overflow-hidden">
-            {ACTIVITY_ITEMS.map((a) => (
-              <div key={a.id} className="flex items-start gap-3 p-4 hover:bg-secondary/30 transition-colors">
+          <div className="rounded-lg border border-border bg-card-bg overflow-hidden relative">
+            <div className="absolute left-[22px] top-8 bottom-8 w-px bg-border" />
+            <div className="divide-y divide-border">
+            {ACTIVITY_ITEMS.map((a) => {
+              const Icon = a.icon;
+              return (
+              <div key={a.id} className="relative flex items-start gap-3 p-4 pl-6 hover:bg-secondary/30 transition-colors">
                 <div className="w-9 h-9 rounded-full bg-accent flex items-center justify-center text-xs font-medium text-text-primary shrink-0">
                   {a.avatar}
                 </div>
@@ -486,9 +501,11 @@ export default function DashboardPage() {
                   </p>
                   <p className="text-xs text-text-secondary mt-0.5">{a.time}</p>
                 </div>
-                <a.icon className="w-4 h-4 text-text-secondary shrink-0 mt-0.5" />
+                <Icon className="w-4 h-4 text-text-secondary shrink-0 mt-0.5 ml-auto" />
               </div>
-            ))}
+            );
+            })}
+            </div>
           </div>
         </motion.section>
       </motion.div>

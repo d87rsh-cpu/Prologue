@@ -256,11 +256,21 @@ export function useScores() {
     })(),
   };
 
+  const lastUpdatedByType = {
+    task_completion: taskCompletionRows.length ? taskCompletionRows[taskCompletionRows.length - 1]?.created_at : null,
+    communication_quality: commRows.length ? commRows[commRows.length - 1]?.created_at : null,
+    documentation_quality: scores.filter((s) => s.score_type === 'documentation_quality').pop()?.created_at ?? null,
+    delegation: scores.filter((s) => s.score_type === 'delegation_effectiveness').pop()?.created_at ?? null,
+    consistency: scores.length ? scores[scores.length - 1]?.created_at : null,
+    leadership: null,
+  };
+
   return {
     loading,
     scores: calculatedScores,
     trends,
     scoreHistory,
+    lastUpdatedByType,
     rawScores: scores,
     refetch: load,
   };
