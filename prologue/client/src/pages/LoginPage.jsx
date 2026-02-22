@@ -5,7 +5,7 @@ import { Copy, Check, Loader2 } from 'lucide-react';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
 import { useAuth } from '../hooks/useAuth';
-import { supabase } from '../lib/supabase';
+import { supabase, isSupabaseConfigured } from '../lib/supabase';
 
 const STAT_PILLS = [
   '2,400+ Projects Completed',
@@ -23,7 +23,7 @@ function getRedirectPath(user) {
 
 export default function LoginPage() {
   const navigate = useNavigate();
-  const { signUp, signInWithEmployeeId, signOut, loading: authLoading } = useAuth();
+  const { signUp, signInWithEmployeeId, signOut, enterDemoMode, loading: authLoading } = useAuth();
 
   const [tab, setTab] = useState('login');
   const [loginEmployeeId, setLoginEmployeeId] = useState('');
@@ -71,6 +71,11 @@ export default function LoginPage() {
       setSignupError('Email is required.');
       return;
     }
+    const emailTrimmed = signupEmail.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailTrimmed)) {
+      setSignupError('Please enter a valid email address (e.g. name@gmail.com).');
+      return;
+    }
     if (!signupPassword) {
       setSignupError('Password is required.');
       return;
@@ -81,11 +86,12 @@ export default function LoginPage() {
     }
     setSubmitLoading(true);
     try {
-      const { employeeId } = await signUp(signupName.trim(), signupEmail.trim(), signupPassword);
+      const { employeeId } = await signUp(signupName.trim(), emailTrimmed, signupPassword);
       setGeneratedId(employeeId);
       setSignupSuccess(true);
     } catch (err) {
-      setSignupError(err?.message || 'Sign up failed. Please try again.');
+      const msg = err?.message || 'Sign up failed. Please try again.';
+      setSignupError(msg);
     } finally {
       setSubmitLoading(false);
     }
@@ -112,7 +118,13 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex">
+    <div className="min-h-screen flex flex-col">
+      {!isSupabaseConfigured && (
+        <div className="bg-amber-500/20 border-b border-amber-500/50 text-amber-200 px-4 py-3 text-sm text-center">
+          <strong>Supabase not configured.</strong> To log in or sign up: create <code className="bg-black/20 px-1 rounded">client/.env</code> with <code className="bg-black/20 px-1 rounded">VITE_SUPABASE_URL</code> and <code className="bg-black/20 px-1 rounded">VITE_SUPABASE_ANON_KEY</code> (copy from <code className="bg-black/20 px-1 rounded">.env.example</code>), then restart the dev server.
+        </div>
+      )}
+      <div className="min-h-screen flex flex-1">
       {/* Left panel */}
       <div
         className="w-1/2 min-h-screen bg-primary relative flex flex-col justify-between p-10 overflow-hidden"
@@ -258,7 +270,20 @@ export default function LoginPage() {
                         error={!!signupError}
                       />
                     </div>
-                    {signupError && <p className="text-sm text-red-500">{signupError}</p>}
+                    {signupError && (
+                      <div className="space-y-2">
+                        <p className="text-sm text-red-500">{signupError}</p>
+                        {signupError.includes('Too many') || signupError.includes('15') ? (
+                          <div className="rounded-lg bg-amber-500/10 border border-amber-500/30 p-3 text-sm text-amber-200 space-y-2">
+                            <p className="font-medium">Fix this for next time:</p>
+                            <p>In Supabase Dashboard go to <strong>Authentication → Providers → Email</strong> and turn <strong>OFF</strong> &quot;Confirm email&quot;. Then sign-up won’t send emails and won’t hit the limit.</p>
+                            <Button type="button" variant="secondary" className="w-full mt-2" onClick={() => { enterDemoMode(); navigate('/dashboard'); }}>
+                              Continue to dashboard as demo user
+                            </Button>
+                          </div>
+                        ) : null}
+                      </div>
+                    )}
                     <Button type="submit" className="w-full" size="lg" disabled={submitLoading}>
                       {submitLoading ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : 'Create Account & Get Employee ID'}
                     </Button>
@@ -293,6 +318,7 @@ export default function LoginPage() {
             )}
           </div>
         </motion.div>
+      </div>
       </div>
     </div>
   );

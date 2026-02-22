@@ -69,8 +69,6 @@ export default function DashboardSidebar() {
             )}
           </div>
         </div>
-      </div>
-
       <nav className="flex-1 overflow-auto p-3 flex flex-col gap-0.5">
         {navItems.map(({ to, icon: Icon, label, badge, badgeFromContext }, i) => {
           const useActive = to === '/dashboard' || to === '/messaging' || to === '/scores' || to === '/completed';

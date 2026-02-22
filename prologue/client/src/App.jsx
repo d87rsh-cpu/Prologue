@@ -1,4 +1,5 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
+import { Loader2 } from 'lucide-react';
 import { useAuth } from './hooks/useAuth';
 import ProtectedRoute from './components/ProtectedRoute';
 import LoginPage from './pages/LoginPage';
@@ -17,7 +18,17 @@ import DashboardLayout from './components/layout/DashboardLayout';
 
 function RedirectFromRoot() {
   const { user, loading } = useAuth();
-  if (loading) return null;
+  // #region agent log
+  const dest = loading ? 'loading-ui' : (!user ? '/login' : (user.onboarding_complete ? '/dashboard' : '/onboarding'));
+  if (typeof console !== 'undefined') console.log('[dbg] RedirectFromRoot', { loading, hasUser: !!user, dest });
+  // #endregion
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-primary">
+        <Loader2 className="w-10 h-10 animate-spin text-success" aria-hidden />
+      </div>
+    );
+  }
   if (!user) return <Navigate to="/login" replace />;
   return <Navigate to={user.onboarding_complete ? '/dashboard' : '/onboarding'} replace />;
 }
