@@ -137,7 +137,6 @@ export default function PRDFormPage() {
       out_of_scope: outOfScope,
       target_date: targetDate,
       hours_per_day: hoursPerDay,
-      days_per_week: daysPerWeek,
       invite_email: inviteEmail.trim() || null,
       team_roles_needed: project?.team_roles_needed ?? [],
       tasks: taskTemplates,

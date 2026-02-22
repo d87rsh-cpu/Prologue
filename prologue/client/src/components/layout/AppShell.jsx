@@ -11,7 +11,7 @@ export default function AppShell() {
       <TopBar />
       <div className="flex flex-1 overflow-hidden">
         <Sidebar />
-        <main className="flex-1 overflow-auto">
+        <main className="flex-1 overflow-auto min-w-0">
           <AnimatePresence mode="wait">
             <PageTransition key={location.pathname}>
               <Outlet />

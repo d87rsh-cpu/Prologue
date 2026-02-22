@@ -171,15 +171,23 @@ export default function DashboardPage() {
   if (loading) return <SkeletonDashboard />;
 
   if (!project) {
+    const isDemo = user?.employee_id === 'PRO-DEMO';
     return (
       <div className="p-6 max-w-[1400px] mx-auto">
         <EmptyState
           icon={ClipboardList}
           title="No active project"
-          subtitle="Start a project from the project recommendations to see your dashboard."
+          subtitle={isDemo ? "You're in demo mode. View your demo certificate or go to projects to get started." : 'Start a project from the project recommendations to see your dashboard.'}
           actionLabel="Go to Projects"
           onAction={() => navigate('/projects')}
         />
+        {isDemo && (
+          <div className="mt-4 flex justify-center">
+            <Button variant="secondary" onClick={() => navigate('/certificate')}>
+              View demo certificate
+            </Button>
+          </div>
+        )}
       </div>
     );
   }

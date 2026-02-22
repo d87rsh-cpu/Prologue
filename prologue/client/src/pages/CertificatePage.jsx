@@ -181,11 +181,28 @@ export default function CertificatePage() {
         return;
       }
 
+      const isDemoUser = user?.employee_id === 'PRO-DEMO' || user?.id === '00000000-0000-0000-0000-000000000000';
       const proj = await fetchActiveUserProject(user.id);
       if (cancelled) return;
       if (!proj) {
+        if (isDemoUser) {
+          const demoKey = 'DEMO-RAHUL-ECOM-2025';
+          const demo = DEMO_CERTS[demoKey];
+          if (demo) {
+            setProject({ project_title: demo.projectTitle, my_role_id: null });
+            setCertId(demo.certId);
+            setScoreBreakdown(demo.scoreBreakdown);
+            setOverall(demo.overall);
+            setGrade(demo.grade);
+            setIssueDate(demo.issueDate);
+            try {
+              const dataUrl = await QRCode.toDataURL(`${VERIFY_BASE_URL}/${demo.certId}`, { width: 180, margin: 1 });
+              if (!cancelled) setQrDataUrl(dataUrl);
+            } catch (_) {}
+          }
+        }
         setLoading(false);
-        setProject(null);
+        if (!isDemoUser) setProject(null);
         return;
       }
 
@@ -236,13 +253,20 @@ export default function CertificatePage() {
   }, [user?.id, certIdParam]);
 
   const handleDownloadPDF = async () => {
-    if (!certCardRef.current) return;
+    if (!certCardRef.current) {
+      toast.error('Certificate not ready. Please wait for it to load.');
+      return;
+    }
     try {
+      certCardRef.current.scrollIntoView({ behavior: 'instant', block: 'start' });
       const canvas = await html2canvas(certCardRef.current, {
         scale: 2,
         useCORS: true,
+        allowTaint: true,
         backgroundColor: '#ffffff',
         logging: false,
+        windowWidth: certCardRef.current.scrollWidth,
+        windowHeight: certCardRef.current.scrollHeight,
       });
 
       const imgData = canvas.toDataURL('image/png');
@@ -290,8 +314,9 @@ export default function CertificatePage() {
       pdf.save(filename);
       toast.success('Certificate downloaded successfully!');
     } catch (err) {
-      console.error(err);
-      toast.error('Failed to download PDF');
+      console.error('Certificate PDF error', err);
+      const msg = err?.message ?? String(err);
+      toast.error(msg.includes('Failed') ? 'Download failed. Try a different browser or disable extensions.' : `Download failed: ${msg.slice(0, 60)}`);
     }
   };
 
